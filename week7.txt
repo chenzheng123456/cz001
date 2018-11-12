@@ -1,0 +1,1254 @@
+第十九节课 2018年11月5日  周一
+----------------------------------------------------------------------I
+
+【数组】
+变量：存储单个元素的内存空间
+数组：存储多个元素的连续的内存空间，相当于多个变量的集合
+	（支持不连续，稀松格式）
+索引：编号从0开始，属于数值索引，也可以字母格式a-z
+	（bash4.0以后版本支持）
+bash --version：查看版本
+
+--声明数组：
+	declare -a title 普通数组(只能使用整数)
+	declare -A title 关联数组(可以使用整数和字符串)
+	
+--数组赋值..从0开始赋值
+(1) 一次只赋值一个元素
+	declare -a title 建议先声明 
+	title[0]=ceo
+	title[1]=coo
+	title[2]=cto
+	title[3]=development
+(2) 一次赋值全部元素
+	title=("ceo" "coo" "cto" ...)
+(3) 只赋值特定元素
+	title=([0]="ceo" [3]="cto" ...)
+(4) 交互式数组值对赋值
+	read -a title
+输入：ceo coo cto..
+
+ （只要能生成空格隔开的字符串，就能批量生成赋值，也可嵌入命令）
+如：alpha=（{a..z}）  echo${alpah[2]} →c 
+    filename=（*） 依次给当前目录文件赋值(包括目录）
+    filename=（f{1,2,3}.{txt,log}）
+	echo ${file[*]}→f1.txt f1.log f2.txt f2.log f3.txt f3.log
+    
+
+--引用数组
+	echo $title      ceo  默认第0元素
+	echo ${title[1]} coo
+	echo ${#title[*]} | echo ${#title[@]} 列出所有元素个数 4
+	echo ${title[*]}  | echo ${title[@]} 列出所有元素 x.x.x.x
+--例：
+declare -a title 建议先声明 
+title[0]=ceo
+title[1]=coo
+title[2]=cto
+title[3]=development
+for i in `seq 0 $[$#title[@]-1]`;do echo Title is ${title{$i}};done
+或↑↓
+for i in `seq 0 ${#title[@]}`;do echo Title is ${title${i-1}};done
+
+--额外添加元素
+	title[4]=for↓或
+	title[${#title[@]}]=for 
+--删除数组元素
+	unset ${title[1]} 删除当个元素
+	unset title       删除整个素组
+
+--关联数组(如果不关联数组，默认为普通索引）
+	declare -A arr ↑
+	arr[a]=aaa
+	arr[b]=bbb
+	arr[c]=ccc
+	echo ${arr[a]} → aaa 
+（如果参数有空格，需要加上引号""）
+
+
+【数组数据处理】
+echo ${litle[*]:1:2}  跳过第1个元素，显示后面2个元素
+echo ${litle[*]:2}    跳过第前2个元素，显示后面所有 
+
+
+
+【字符串切片】
+lh=`echo {a..z}|tr -d ' '`  
+	echo ${#lh} 显示变量lh的长度 26
+	echo ${lh:-3} 显示最后3个  xyz
+	echo ${lh:4:-3}  去掉前4个，后三个，再显示
+	echo ${lh: -5:-2} 取后5个，后2个不要 centos6不支持
+	
+rootinfo=`getent passwd root`
+显示：root:x:0:0:root:/root:/bin/bash
+echo ${rootinfo#*root} 删除一个root之前的参数，再显示
+echo ${rootinfo##*root} 删除root之前所有参数，再显示
+
+echo ${rootinfo%root*} 删除最后root的参数，再显示
+echo ${rootinfo%%root*}删除root之后的参数，再显示
+
+usr=http://www.magedu.com:80
+echo $url=sed -nr 's/.*\/(.*):.*/\1/p'→取中间网址
+echo ${url/:/#} 前1个：换成 #
+echo ${url//:/#} 所有：都换成#
+echo #{url/#u/U} 行首u换成U  
+echo ${url/%0/o} 行尾0换成o
+
+echo ${url^^}：字母转换为大写
+echo ${url,,}：转换为小写 
+
+【例】：生成10个随机数，取出最大值和最小值
+vim max_ min.sh
+declare -a num
+for((i=0;i<10;i++));do
+	num[$i]=$RANDOM
+	if [ $i -eq 0];then
+		max=${num[$i]}
+		min=${num[$i]}
+	else
+		if[ $max -lt ${num[$i]} ];then
+			max=${num[$i]}
+		elif [${$min -gt ${num[$i]} ];then
+			min=${num[$i]}
+		else
+			true
+		fi
+	fi
+done
+echo all random are ${num[*]}
+echo max random is $max
+echo min random is $min
+
+【declare有类型变量】 等价于typeset
+declare [选项] 变量名
+	-i 变量定义为整型数
+	-r 声明或显示只读变量
+	-a 将变量定义为普通数组
+	-A 将变量定义为关联数组
+	-f 显示已定义的所有函数及其内容
+	-F 仅显示已定义的所有函数名
+	-x 声明或显示环境变量和函数
+	-l 声明变量为小写字母 declare –l var=UPPER
+	-u 声明变量为大写字母 declare –u var=lower
+
+
+【--eval】能实现两次处理__扫描命令行进行所有的置换，然后再执行该命令
+例 ：   CMD=whoami
+	echo $CMD
+	显示：whoami
+	eval $CMD
+	显示：root
+
+--间接变量引用
+	title=ceo
+	ceo=mage	
+	eval echo \$$title
+	或↓
+	echo ${!title}	
+	
+--mktemp:创建并显示临时文件，可避免冲突
+	-d 创建临时目录
+	-p 指定存放目录
+	 mktemp fileXXX （X至少出现3次）
+	（建议用变量引用，用时好找）
+
+--install：相当于一些工具的集合，如：mkdir/cp/chown/chmod
+例：install -m 600 -owang -gmage /etc/issue /data/issue_bak
+	
+【expect】把交互式命名变成非交互式，ftp/ssh登录等
+（适用于多台服务器执行相同操作的环境）
+	-c 从命令行执行expect脚本
+	-d 输出调试信息
+	spawn：启动新的进程
+	send：用于向进程发送字符串
+	expect：从进程接收字符串
+	interact：允许用户交互，不退出
+	exp_continue 匹配多个字符串在执行动作后加此命令
+
+例：#!/user/bin/expect	▲  
+spawn scp /etc/fstab 192.168.8.100:/app
+expect {
+	"yes/no" { send "yes\n";exp_continue }
+	"password" { send “magedu\n" }
+}
+expect eof(表示退出）
+
+--------------------
+set ip 192.168.8.100    $ip
+set user root           $user
+set password magedu     $password
+表示变量
+--------------------------
+set ip [lindex $argv 0]       .
+set user [lindex $argv 1]
+set password [lindex $argv 2]
+参数变量
+引用：./expect 192.168.34.6 wang mage ↑分别对应以上参数
+
+【练习】
+1)输入若干个数值存入数组中，采用冒泡算法进行升序或降序排序
+[root@magedu ~]# vim /root/bin/bubble.sh
+quit() {
+	if [[ $1 =~ [Qq][Uu][Ii][Tt]|[Qq] ]];then
+		exit 0
+	fi
+}
+	read -p "请输入数字: " -a num
+		quit $num
+	for x in ${num[*]};do
+	if [[ $x =~ ^-?[0-9]+$ ]];then
+		true
+	else
+		echo "请输入正确的整数数字"
+		exit 1
+	fi
+        done
+     while true;do
+     for (( i=0;i<${#num[*]};i++ ));do
+     for (( j=0;j<${#num[*]}-1;j++ ));do
+     if [ ${num[j]} -gt ${num[j+1]} ];then
+	n=${num[j]}
+	num[j]=${num[j+1]}
+	num[j+1]=$n
+     fi
+     done
+     done
+	echo ${num[*]}
+	read -p "请输入数字或输入quit退出: " -a num1
+	quit $num1
+     if [[ $num1 =~ ^-?[0-9]+$ ]];then
+	true
+     else
+	echo "请输入正确的整数数字"
+	continue
+     fi
+	num[${#num[*]}]=$num1
+     done
+
+
+2)将下图所示，实现转置矩阵matrix.sh
+1 2 3 1 4 7
+4 5 6 ===> 2 5 8
+7 8 9 3 6 9
+
+3)打印杨辉三角形
+vim /root/bin/yanghuisanjiao.sh
+	if (test -z $1) ;then
+	read -p "Input Max Int Lines:" MAX
+	else
+		MAX=$1
+	fi
+     for ((i=1;i<=MAX;i++))
+     do
+     for ((j=1;j<=i;j++))
+     do
+	f=$(($i-1))
+	g=$(($j-1))
+     if [ "$j" == 1 ];then
+	declare SUM_${i}_$j=1
+     else
+	declare A=$[SUM_${f}_$j]
+	declare B=$[SUM_${f}_$g]
+	declare SUM_${i}_$j=`expr $A + $B`
+     fi
+	echo -n $[SUM_${i}_$j]
+	echo -en " "
+	done
+	echo " "
+	done
+
+
+-----------------------------
+【系统启动和内核管理】
+
+▲centos6  /etc/inittab  可以设置默认开机界面 3or5
+↑任意键+a 删除后字符后（默认进入图形界面）
+
+init 0 关机
+init 1 单用户模式，不能通过网络登录，也没有IP，通常用于维护
+init 2 多用户模式，但没有NFS功能，没有网络时，和3一样
+init 3 字符界面
+init 4 预留
+init 5 图形界面
+init 6 重启
+
+/etc/inittab 如果设置错误，修复
+/boot/grub/grub.conf （↑实际是修改的此文件）
+任意键→a→3 （这次临时进入3模式，可绕过错误文件）
+输入1 S s single 都表示单用户，进入该模式
+
+ntsysv --level=3  
+ntsysv：控制后台服务启动 *表示启动  （一次只能改一种模式）
+
+chkconfig --level 13 atd on 
+修改1和3模式下atd 为on(一次能改多个模式）
+
+chkconfig --list atd (默认修改2345模式）
+
+atd服务
+service atd start   服务启动
+service atd restart 重新启动
+service atd stop    服务停止
+service atd status  查看服务状态
+
+. /etc/init.d/functions （action 可做判断显示）
+
+脚本默认目录：/etc/init.d
+
+【例】
+/etc/init.d/testsrv目录   -默认全off
+#!/bin/bash
+#chkconfig:35(模式） 96（S启动顺序）03{K关闭顺序}
+#description：test service
+.  /etc/init.d/functions
+case $1 in
+start)
+	touch /var/lock/subsys/testsrv
+	action "starting testsrv"  true 
+	;;
+stop)
+	rm -f /var/lock/subsys/testsrv
+	action "stopping testsrv"  true
+	;;
+restart)
+	action "stopping testsrv"  true
+	action "starting testsrv"  true
+	;;
+status)
+	if [ -f /var/lock/subsys/testsrv ];then
+		echo testsrv is running...
+	else    
+		cho testsrv is stoped..
+	fi
+	;;
+*)
+	echo Usage: /etc/init.d/testsrv {start|stop|restart|status}
+esac  
+
+添加服务列表到/etc/rc3.d   /etc/rc5.d
+chkconfig --add testsrv 添加服务
+chkconfig --list testsrv 查看服务
+chkconfig --level 3 testsrv off 三模式下关闭该服务
+chkconfig --del testsrv 删除该服务
+
+【修复服务进程无法启动】
+任意键+a→1进入单用户模式→然后chkcofnig查看，关闭该服务再重启
+（chkconfig --level 3 testsrv off ）↑
+
+
+--瞬态服务(transient) 被xinetd守护进程所管理__非独立服务(代理服务）
+（↑ centos7没有该服务，有替代的）
+例：telnet服务 （yum install telnet-server）
+/etc/rc.d/rc/local
+
+--xinetd启用telnet唤醒服务：例telnet（
+vim /etc/xinetd.d/ ▲配置文件（把disable改成no开始监听）
+chkcofig telnet on/off
+（service xinetd start 第一次装完需要启动服务生效）
+
+可以需要启动的服务，添加到文件
+可以启动，不能关闭，只能手工关闭，killall -9 xx
+
+
+--/etc/rc*.d/rc.local  最后运行（可放置手动启动的服务脚本）
+只能手动killall -9 xx 关闭服务
+
+【当单用户模式某些服务也启动不了】
+任意键+a → init=/bin/bash → vi /etc/rc.d/rc.local(再删除相关内容）
+
+--关闭ctrl+alt+deletel重启快捷键
+vim /etc/init/control-alt-delete.conf （注释掉就行）
+
+【开机启动详细流程centos6】：
+post
+mbr(446) grub stage1,stage1.5（加载boot所在分区）,
+grub stabge2 /boot/grub/    
+(↑grub.conf定义了内核vmlinuz路径及根分区，以及initramfs.img加驱动）
+/sbin/init 读取根下的第一个进程，↓读取它的配置文件
+/etc/inittab 决定开机进入什么模式
+/etc/rc.d/rc.sysinit  运行该系统初始化脚本
+/etc/rc*.d/K S 读取相关进程文件 
+/etc/rc.d/rc.local 手动服务脚本
+login...
+
+ 
+--grub阶段 故障 进入光盘引导系统
+chroot  /mnt/sysimage
+grub-install /dev/sda  可以修复grub 1 1.5 2阶段
+sync
+exit
+
+修复grub MBR512方式：
+1)grub-install /dev/sda (能修复1.5 2阶段) 更通用，不依赖文件
+2)grub
+	root (hd0,0)  0：第一个硬盘）0：第一个分区sda1
+	setup (hd0) 表示要把mbr写到哪个硬盘
+（依赖 /boot/grub/lost+found文件↑）
+
+
+--/boot/grub/grub.conf 配置文件
+可复制菜单项 title/root/kernel/initrd /defulat:1（第2个菜单）
+
+vim /etc/grub/grub.conf **..(quiet)" 建议删除，这样系统启动，会显示加载过程而不是图像化，圈圈等待
+
+initrd:虚拟内存，磁盘文件（加载根分区）
+
+grub.conf文件故障处理（次序不对）
+任意键引导，d先删除，然后o增加一行，e编辑，添加命令：↓
+		initrd /initramfs-`uname -r`.img;然后b启动
+
+开机背景：/boot/grub/splash_xpm.gz   可修改↓
+截图 （像素640x480）
+rz 先添加图片文件
+yum install  convert 安装转换工具
+convert -resize 640x480 -colors 14 win.jpg win.xpm 
+gzip win.xpm 压缩图片 
+mv win.xpm.gz /boot/grub/
+vim /boot/grub/grub.conf  修改图片路径名
+splash.xpm.gz(原图片名)
+
+
+防止轻松破解口令：
+vim /boot/grub/grub.conf
+添加：password centos  这一行(centos密码）
+
+加密口令：grub-md5-crypt 
+在输入：如 centos
+然后把这一串字符复制到 grub.conf，就可加密 ↓
+passwd --md5 $1$0m6660$zjzYUtqoZ4046MbBP9ipI/ 
+
+加密口令：更安全 grub-crypt SHA512加密▲
+passwd --encrypted xxxx
+
+【实验】
+--/etc/fstab 被破坏修复 【error15】
+进入光盘救援模式
+blkid 查看UUID
+fdisk -l 查看磁盘分区
+mkdir /mnt/rootfs
+mount /dev/sda1 /mnt/rootfs
+mount /dev/sda1 2 3 4  依次挂载查看状态
+unmount /mnt/rootfs
+vi /mnt/rootfs/etc/fstab
+ 	/dev/sda1 /boot/  etx4 defaults 0 0
+	/dev/sda2 /       etx4 defaults 0 0
+	/dev/sda3 /data/  etx4 defaults 0 0
+	/dev/sda5  swap   swap defaults 0 0
+exit
+再进入光盘救援模式
+然后再重新安装内核以及vim 编辑grub.conf文件
+
+1）rm -rf /boot/grub/*  恢复之
+进入光盘引导，救援模式 
+挂载光盘 mount /dev/sr0 /mnt/cdrom,
+安装内核 rpm -i /mnt..kernel-2.6..rpm --root=/mnt/sysimage/ --force    	 sync
+修复grub chroot /mnt/sysimage/
+	 grub-install /dev/sda
+	 vim /boot/grub/grub.conf  添加相应配置文件
+	 vim /etc/sysconfig/selinux 禁用disabled
+	 exit
+
+	
+
+2）写一个服务启动脚本 etc/init.d/testsrv
+#!/bin/bash
+#chkconfig:35(模式） 96（S启动顺序）03{K关闭顺序}
+#description：test service
+.  /etc/init.d/functions
+case $1 in
+start)
+	touch /var/lock/subsys/testsrv
+	action "starting testsrv"  true 
+	;;
+stop)
+	rm -f /var/lock/subsys/testsrv
+	action "stopping testsrv"  true
+	;;
+restart)
+	action "stopping testsrv"  true
+	action "starting testsrv"  true
+	;;
+status)
+	if [ -f /var/lock/subsys/testsrv ];then
+		echo testsrv is running...
+	else    
+		cho testsrv is stoped..
+	fi
+	;;
+*)
+	echo Usage: /etc/init.d/testsrv {start|stop|restart|status}
+esac 
+
+--命令总结：expect自动化执行/mktemp/install/grub-inistall/grub-crypt/grub-md5-crypt/chkconfig/ntsysv/convert/eval/
+
+
+----------------------------------------------------------------------I
+第二十节课 2018年11月7日  周三
+----------------------------------------------------------------------I
+【逻辑卷磁盘 恢复删除 centos6.9】
+进入光盘救援系统
+lvs 查看逻辑卷信息
+blkid 查案UUID和文件系统信息
+vgdisplay  （逻辑卷状态 不可用）
+vgchange -ay  激活逻辑卷
+mkdir  /mnt/rootfs
+mount /dev/VolGroup/lv_root  /mnt/rootfs  
+vim /mnt/rootfs/etc/fstab
+编辑    /dev/sda1  /boot/ ext4 defaults 0 0
+	/dev/VolGroup/lv_root / ext4 defaults 0 0
+	/dev/VolGroup/lv_home swap swap default 0 0
+重新启动，进入光盘引导系统，修复grub.conf
+chroot /mnt/sysimage
+mount /dev/cdrm /mnt
+rpm -ivh /mnt/P..kerner-2.6  --replacepkgs 安装内核
+sync
+grub-install /dev/sda (安装MBR引导分区）
+sync ； exit
+---grub命令模式下操作
+kernel /vmlinuz-2.6..  root=/dev/VolGroup/lv_root
+initrd /initramfs-2.6..  
+boot 启动 	
+
+
+
+【/sbin/init 删除还原】--从远程复制然后还原
+rpm -qf /sbin/init  查询命令依赖于哪个包
+	upstart-0.6.5...
+a任意键→init=/bin/bash 内核启动不找默认init，直接找bash
+modprobe e1000
+ifconfig eht0 192.168.34.123/24
+scp 192.168.34.6（其他主机）：/sbin/init /sbin/`
+或↓通过httpcopy安装
+centos7（对端主机）
+yum install httpd
+systemctl start httpd
+cp /etc/fstab /var/www/html
+要修复的主机
+mount -o remount,rw / 重新挂载
+wget http://192.168.34.7/fstab  通过http下载fstab
+
+cenots6（对端主机）
+cp /sbin/init /var/www/html/ 基于http共享
+cd /sbin
+wget http://192.168.34.6/init copy到本地
+chmod +x /sbin/init 加执行权限
+sync；exit重启
+
+
+
+
+【自制linux系统】--centos 6
+添加新硬盘 20G
+分区：fdisk /dev/sdb 1 +1G  n (boot)	
+	             2 +10G n 
+		     3 +2G  t 82 w	 (swap)
+创建文件系统
+mkfs.ext4 /dev/sdb1  (1G boot分区）
+mkfs.ext4 /dev/sdb2  （10G 根分区）
+mkswap /dev/sdb3      （2G swap分区）
+
+mkdir /mnt/boot（必须叫boot，临时挂载作为boot的分区，以及相关grub信息）
+mount /dev/sdb1 /mnt/boot  挂载boot分区
+grub-insatll --root-directroy=/mnt/ /dev/sdb  安装grub
+cp /boot/vmlinuz-2.6.. /mnt/boot/vmlinuz 复制内核到boot
+cp /boot/initramfs.2.6.. /mnt/boot/initramfs.img(压缩过的小型根目录)
+vim /mnt/boot/grub/grub.conf
+	default=0
+	timeout=3
+	title linux
+	kernel /vmlinuz root=/dev/sda2 selinux=0 init=/bin/bash
+	initrd /initramfs.img
+
+mkdir /mnt/sdb2 /media/
+mount /mnt/sdb2 /media/
+mkdir /mkdir/{etc/dev,proc,sys,usr,var,tmp,mnt,lib,lib64,sbin,bin}
+rz →copycmd.sh 脚本（修改/mnt/sysroot）
+bash copycmd.sh
+	  执行复制以下命令及依赖库：
+（modprobe/ifconfig/ls/mount/ping/cat/vi/df/lsblk/blkid/fdisk/cp/mv/rm/quit,insmod)	
+locate e1000；copy /lib/modules/2.6../e1000.ko  /media/lib 
+chroot /media/
+sync	
+然后复制硬盘到别的系统实验   （LFS 可构建自己的linux）
+insmod /lib/e1000.ko
+ifconfig eth0 192.168.34.123/34 (主机模式）；ping ；ls /proc；测试
+	
+
+
+
+--/proc 目录
+	/proc/sys/net/ipv4/ip_forward (0禁用 1转发)
+	/proc/sys/vm/drop_caches(0保留缓存 1清除缓存）
+	/net/ipv4/icmp_echo_ignore_all （1禁ping 0允许）
+
+	sysctl -p 读取配置文件到内存，立即成效
+	sysctl -a 查看所有生效配置（文件系统，网络，内存）
+	sysctl -w 设置参数（sysctl -w net/ipv4/ip_forward=1）
+	▲/etc/sysctl.conf ↑保存/proc/sys/下相关配置参数
+
+
+--/sys 目录（一般不需要改）
+	/etc/udev/rules.d 修改设备名
+	/usr/lib/udev/sules.d 
+	专用工具：udervadmin,hotplug
+
+
+
+	ntsysv：设置或启用某些功能
+	wim命令（转换成ntfs格式）↓
+	convert g:/fs/:ntfs  ; 然后在输入卷标
+	lsmod：显示内核已加载的模块（/proc/modules）
+	modinof ：查看模块信息
+		-n 模块文件路径
+		-p 模块参数
+		-a 作者
+		-d 描述
+	modprobe 安装模块  -r 卸载
+	（/etc/modprobe.conf | /etc/modprobe.d/*.conf 配置文件）  
+	insmod （安装模块，需要加路径，不解决自动依赖）
+	rmmod 卸载模块
+
+
+
+
+--卸载内核
+	删除/lib/modules/目录下不需要的内核库文件
+	删除/usr/src/linux/目录下不需要的内核源码
+	删除/boot目录下启动的内核和内核映像文件
+	更改grub的配置文件，删除不需要的内核启动列表
+
+
+【centos7 】
+
+--Systemd新特性
+	系统引导时实现服务并行启动
+	按需启动守护进程
+	自动化的服务依赖关系管理
+	同时采用socket式与D-Bus总线式激活服务
+	系统状态快照
+	用同一个功能启动，只能同一个功能关闭
+
+--配置文件
+/usr/lib/systemd/system/
+每个服务最主要的启动脚本设置，类似于之前的/etc/init.d/
+
+socket IP 端口号等组合
+servece unit：文件扩展名为.service, 用于定义系统服务
+target unit文件扩展名为.target，用于模拟实现运行级别
+systemctl -t help 查看unit类型
+systemctl set-default multi-user.target  切换到命令行模式
+systemd-analyze 统计系统启动时间
+systemctl mask name.service 禁止自动和手动启动（生成软链接指向垃圾箱）
+systemctl unmask name.service 取消↑（删除软连接）
+systemctl is-enabled httpd 服务下次开机是否启动 
+  --type service 查看服务状态
+systemctl list-dependencies xx 查看xx依赖与那些服务
+systemctl list-dependencies name.service 查看服务依赖关系
+	inactive 不运行
+	enabled 开机启动
+	disabled 开机不启动
+	static 开机不启动，但可被另一个启用的服务激活
+
+相关布尔值，1、yes、on、true 都是开启，0、no、off、false 都是关闭
+
+--创建bak.service服务以及bak.sh备份脚本
+vim bak.service
+	[Unit]
+	Description=backup /etc
+	Requires=atd.service
+	[Service]
+	Type=simple
+	ExecStart=/bin/bash -c "echo /data/bak.sh|at now"
+	[Install]
+	WantedBy=multi-user.target
+
+cd /usr/lib/systemd/system/  ▲
+vim bak.sh
+	tar cvf /date/etc-`data +%F`.tar /etc/  $> /dev/null
+chmod+x /data/bak.sh
+systemctl daemon-reload  加载service到内存
+systemctl start bak 启动服务
+systemctl list-unit-files 查看服务查看
+
+--target units：（类似centos6 runlevel，一些服务的集合）
+unit配置文件：.target
+ls /usr/lib/systemd/system/*.target
+systemctl list-unit-files --type target --all 服务状态
+systemctl isolate multi-user.target 命令行切换
+systemctl isolate graphical.target  图形切换
+
+--开机自动进入图形/命令行界面
+systemctl get-default 查看
+systemctl set-default multi-user.target  命令行界面
+systemctl set-default graphical.target   图形界面
+
+--切换至紧急救援模式：
+systemctl rescue
+--切换至emergency模式：
+systemctl emergency
+
+
+加载装载程序的配置文件：
+	/etc/grub.d/
+	/etc/default/grub
+	/boot/grub2/grub.cfg
+
+--启动失败时，在linux16行后添加systemd.unit=mult-user.target
+ctrl+x 启动
+systemctl set-default graphical.target（设置恢复正常启动）
+
+
+-- 破解口令方法1
+e键--linux16..(rd.break)打断正常启动--ctrl+x 进入特殊模式--
+---mount -o remount.rw /sysroot--cd /sysroot/
+echo 123|passwd --stdin root
+vim /etc/selinux  改成permissive
+touch /.autorelabel  重启贴标签
+reboot
+
+
+--破解口令方法2
+	启动时任意键暂停启动
+	按e键进入编辑模式
+	将光标移动linux16开始的行，改为rw init=/sysroot/bin/sh
+	按ctrl-x启动
+	chroot /sysroot
+	passwd root
+	touch /.autorelabel
+	exit
+	reboot
+
+--防止破解口令（加grub口令）：
+grub2-setpassword  生成口令 centos
+/boot/grub2/user.cfg   ↑口令文件
+（删除文件即可恢复)
+
+ --vim /etc/default/grub 修改内核启动顺序
+vim /boot/grub2/grub.cfg 查看内核对应的菜单项 
+GRUB_DEFAULT=0/1 编号：0 1..
+grub2-mkconfig -o或> /boot/grub2/grub.cfg
+
+ 
+--删除内核文件
+make clean：清理大多数编译生成的文件，保留config
+make mrproper：清理所有编译生成的文件，config及某些备份文件
+make distclean：mrproper，清理pateches路径以及编辑备份文件
+直接删除目录.. 
+
+在linux16行后添加systemd.unit=emergency 启动时进入紧急模式
+
+
+--删除源码、模块
+rm -rf /lib/modules/4.18.. 
+rm -rf /boot/*4.18 
+vim /boot/grub2/grub.cfg 删除相关记录 menuentry**
+或
+grub2-mkconfig > /boot/grub2/grub.cfg
+
+
+
+
+--修复grub目录（也能修复引导MBR阶段，前446字节）
+rm -rf /boot/grub
+重启进入光盘救援模式
+chroot /mnt/sysimage
+grub2-install /dev/sda
+grub2-mkconfig -o /boot/ grub2.grub.cfg
+exit
+
+	
+实验：centos7 
+1）rm -rf /boot 恢复之
+重启进入光盘救援模式
+chroot /mnt/sysimage
+mount /dev/sr0 /mnt
+rpm -ivh /mnt/Packages/Kernel-3.10....rpm  --force
+grub2-install /dev/sda
+grub2-mkconfig -o /boot/grub2.grub.cfg
+exit;sync
+
+3）防破解centos7 root口令
+grub2-setpassword 
+
+4）/etc/fstab 一项错误，无法启动，恢复
+进入光盘救援模式
+blkid 查看UUID
+fdisk -l 查看磁盘分区
+mkdir /mnt/rootfs
+mount /dev/sda1 /mnt/rootfs
+mount /dev/sda1 2 3 4  依次挂载查看状态
+unmount /mnt/rootfs
+vi /mnt/rootfs/etc/fstab
+ 	/dev/sda1 /boot/  etx4 defaults 0 0
+	/dev/sda2 /       etx4 defaults 0 0
+	/dev/sda3 /data/  etx4 defaults 0 0
+	/dev/sda5  swap   swap defaults 0 0
+
+5)掩码编译内核，并设置默认启动内核
+
+--内核编译（带ntfs格式识别）
+rz linux-4.18.13.tar.xz
+tar xvf linux-4.18.13.tar.xz  解压
+cp /boot/config-3.10.0-862.el7.x86_64  linux-4.18.13/.config 复制文件
+yum groupinstall "Development tools"
+yum install ncurses-devel  
+make menuconfig（增加ntfs功能）需要在.config目录
+	DOS /FAT/NT Filesystems ---->
+		m NTFS file system suport
+		m NTFS write support
+yum install elfutils-libelf-devel -y 安装依赖包
+yum install openssl-devel
+make -j 4 &&{ echo -e '\a';sleep 0.5;echo -e '\a'; }
+make modules_install
+make install
+reboot
+updatedb 更新数据库
+挂载win硬盘到分区查看文件测试
+-------------------------------或
+yum install ntfs-3g 安装支持ntfs文件系统的工具
+重启生效
+
+6)删除新内核
+make distclean：mrproper 清理pateches路径以及编辑备份文件
+或直接删除该目录.
+grub2-mkconfig -o /boot/grub2.grub.cfg 
+sync；reboot
+
+7)自制linux
+8)systemd的service 文件，实验httpd源码编译，手工写一个对应的service文件
+
+9)systemctl 工具常用用法
+systemctl start/stop/restart/statup/ SERVICE
+
+10）禁用selinux
+sed -i /^SELINUX=/cSELINUX=disabled /etc/selinux/config
+
+
+
+
+
+【安全加固SELinux】x
+重点：SElinux概念、原理、启用、禁用▲
+      端口标签、文件安全标签及布尔值（上传下载）修改▲
+ 
+DAC：Discretionary Access Control自由访问控制
+MAC：Mandatory Access Control 强制访问控制
+
+对象(object)：所有可以读取的对象，包括文件、目录和进程，端口等
+主体：进程称为主体(subject)
+
+
+--SElinux工作类型
+Strict：centos5；每个进程都受到selinux的控制
+（识别的服务做相应规则，不识别的服务默认限制）
+targeted：centos5/6/7；用来保护常见的网络服务,仅有限进程受到selinux控制
+（识别的服务做相应规则，不识别服务的默认开放）
+minimum：centos7 从特定常见服务中，再细分化管理
+mil：特定版本才有；多级安全
+
+sestatus：查看SElinux工作状态和类型
+getenforce:查看SElinux策略是否启用
+setenforce  0:permissive   1:enforcing 
+
+vim /boot/grub2/grub.conf 禁用SElinux(linux16..selinux=0）
+
+--SElinux安全上下文
+安全上下文有五个元素组成：
+user:role:type:sensitivity:category（7不支持这项）
+user_u:object_r:tmp_t:s0:c0
+
+ls -Z 查看安全标签（扩展属性_安全上下文）
+-rw-r--r--. “.”表示有扩展属性
+
+user：登录用户类型 
+	system_u受管制/unconfined_u
+role：定义文件，进程和用户的用途 
+	system_r受管制/unconfined_r/object_r文件
+type：数据类型,该文件能被什么类型进程访问
+	admin_home/var_log/default_t/public_content_t多进程共用 ..
+Sensitivity：限制访问需要，定义安全级别  0-15,0最低，target默认：s0
+	
+Category：对特定组织划分不分层的分类，c0-1023个分类，策略默认不使用-7
+
+ll /etc/selinux/targeted/contexts安全上下文/files/file_contexts
+
+--logger 生成日志信息 ;例：logger "this is a test log"
+  tail -f /var/log/messages 查看更新的日志  
+  systemctl restart rsyslog 重启日志服务
+
+--还原/var/log/messages文件
+	chcom -t var_log-t /var/log/messages
+	chcon 修改上下文→ change context
+   或：restorecon  还原应该有的标签 -R递归
+         systemctl restart rsyslog 重启生效
+
+
+senamege fcontext -l|grep "/var/log/messages"
+日志记录数据库，记录var之前应该有的标签,用grep做筛选
+senamege fcontext -a -t http_sys_content_t "/data/www(/.*)?"
+添加安全上下文
+senamege fcontext -d -t http_sys_content_t "/data/www(/.*)?"
+删除安全上下文
+
+
+--SElinux端口标签
+semanage port –l  查看端口标签
+
+semanage port -a -t http_port_t -p tcp 9527 
+http服务添加9527新端口
+
+semanage port -d -t http_port_t -p tcp 9527 
+http服务删除新端口
+
+semanage port -m -t ssh_port_t -p 12345
+tcp服务修改成12345端口（（端口存在基础上））
+
+
+--SElinux布尔值
+getsebool -a 列出所有bool值
+semanage bootean -l |grep tfp 筛选相关bool值
+semanage bootean -l -C 查看修改过的bool值
+setsebool fstp_anon_write on/off  开启/关闭bool值(左，内存生效）
+setsebool -P ftpd_anon_write 1/0  开启/关闭bool值 （内存，文件均生效）
+ 
+yum install samba-server
+vim /etc/samba/smb.conf|6.example|7  SElinux策略说明
+
+grep setroubleshoot /var/log/messages
+sealert -a /var/log/audit/audit.log 更详细
+过滤SElinux策略相关日志
+
+安全事件日志说明 sealert -l 
+帮助 man -k _selinux
+mandb 更新man数据库
+注意：当selinux每一次重新设置后，都需要重启系统
+----------------------------------------------------------------------I
+第二十一节课 2018年11月9日  周五
+----------------------------------------------------------------------I
+
+【文件处理三剑客--AWK】 模式扫描和处理语言
+awk [选项] '{模式，动作;..}'
+BEGIN:文件还未处理前做的操作；END：整个文件处理完后做的操作
+print，printf 最数据进行处理，放在{}
+#如果没有提供pattern语句块，则默认执行{ print }，即打印每一个读取到的行，awk读取的每一行都会执行该语句块
+整行显示$0,每字段编号$1.$2.$3.. 
+例：awk '{print abc$0}' /etc/passwd  
+    abc不加引号默认为变量   "abc" 默认为字符串 
+awk 'BEGIN{print "1+2"}{}{} 数字运算不用加引号
+
+
+-awk变量
+	-F 指明记录“分隔符” (输入）（默认空白符为字段/列/域的分隔符）
+	-v 变量赋值var=value （-v FS=':' 等于 -F":"
+		 FS=: 指明列“分隔符” （输入）	 fragment		
+		OFS=: 指明列“分隔符” （输出）  record
+		 RS=: 指明“:”为一条记录分隔符（输入）	
+		ORS=: 指明“:”为一条记录分隔符（输出）
+（-F或-v FS也能调用shell中的变量，如a=aaa，-v FS=$a FS=aaa）
+（默认一条记录等于一行，以换行符定界）
+（空白符包括回车，换行，TAB）
+	NF 每一行有多少个记录  __字段数量（默认空白符）
+	NR 默认行号            __默认以回车符定界
+	FNR 每个文件单独记录 
+	FILENAME 添加当前文件名
+	ARGC 整个命令有几个参数
+	ARGV []，保存的是命令行所给定的各参数
+
+例：
+ss-nt|awk '{print $5}'|awk -F: 'print $1' 取ip地址
+awk -F "[\[ ]" '{prict $5}' /var/log/httpd/access_log 取时间
+df|awk -f"[ ]+|%"{print $1,$5}  取磁盘名称|利用率
+awk -F: -f awk.txt /etc/fstab从文件取出参数，做过滤
+↑awk.txt内容：{print $1} 
+
+
+【printf】 命令_定义更灵活的格式显示
+--格式符：于item项目一一对应
+	%c：显示字符的ASCII码
+	%d, %i：显示十进制整数
+	%e, %E：显示科学计数法数值 ▲
+	%f：显示为浮点数	
+	%g, %G：以科学计数法或浮点形式显示数值
+	%s：显示字符串 ▲
+	%u：无符号整数 
+	%%：显示%自身
+--修饰符
+	#[#]  字符宽度[精度]，例：%3.1f （浮点数）
+	-     左对齐（默认右对齐）%-15s （左对齐，15宽度）
+	+     数值正负符号
+		
+
+例：awk -F： '{printf "%-20s %-5d\n" $1,$3}'  /etc/passwd
+全对齐，分别预留20字符左对齐,5数字宽度左对齐，换行，显示第1第3段
+
+
+【操作符】
+
+--算术：	x+y, x-y, x*y, x/y, x^y, x%y
+例：awk  BEGIN'{print 2^3}'; 6
+
+--赋值操作符：=, +=, -=, *=, /=, %=, ^=，++, --
+例：awk ‘BEGIN{i=0;print ++i,i}’ 结果 1 1
+    awk ‘BEGIN{i=0;print i++,i}’ 结果 0 1
+
+-x：转换为负数
++x：将字符串转换为数值
+
+--比较操作符： ==, !=, >, >=, <, <=
+
+--模式匹配符：
+~：左边是否和右边匹配，包含
+!~：是否不匹配
+
+--面试题（新浪）  取test这一列
+f1.txt
+1 test.sina.com.cn
+2 music.sina.com.cn
+3 sports.sina.com.cn
+4 news.sina.com.cn
+awk -F "[ .]"  '{print $2 }' 
+
+--逻辑操作符：与&&，或||，非! (运算尽量写在小括号里）
+例：awk -F: '!($3>500){print $1,$3}' /etc/passwd；$3不大于500的再打印
+    awk -F: '$3>1000{print $1,$3}' /etc/passwd；$3大于1000的再打印
+    awk -F: '$3>1000||$3<5{print $1,$3}' /etc/passwd；
+    $3大于1000或小与5的再打印
+
+--条件表达式（三目表达式）
+例：awk -F: '{$3>1000?name="user":name="system";print name,$1,$3}'/etc/passwd
+如果$3等于1000，添加name=user，不等于则添加name=system变量，再打印$1$3
+
+
+--awk PATTER模式，根据条件过滤匹配的行，再做处理（支持正则表达式）
+(1)如果未指定：空模式，匹配每一行
+(2) /regular expression/：仅处理能够模式匹配到的行，需要用/ /括起来
+(3) relational expression: 关系表达式，结果为“真”才会被处理
+真：非0，非空字符串
+假：0.空字符串
+4) line ranges：行范围
+startline,endline：/pat1/,/pat2/ 不支持直接给出数字格式
+awk -F: ‘/^root\>/,/^nobody\>/{print $1}' /etc/passwd
+awk -F: ‘(NR>=10&&NR<=20){print NR,$1}' /etc/passwd
+(5) BEGIN/END模式
+BEGIN{}：仅在开始处理文件中的文本之前执行一次
+END{}：仅在文本处理完成之后执行一次
+
+
+【例】：1个等号是赋值，两个等号是逻辑判断
+df|awk -F"[ ]+|%" '/\/dev\/sda/{print $1,$5}' 取第1和第5行
+
+ss -nt|awk -F"[ ]+|:" '/ESTAB/{print $(NF-2)}' 取倒数第二行
+
+lastb|awk '$3 ~ /^[[:digit:]]/{print $3}' 取$3为任意数字的再打印
+awk  a=" " ‘a{pribt $0}' /etc/passwd  a为真，打印 
+
+awk ‘/^ftp/,/^rpc/{pribt $0}' /etc/p asswd 取ftp开头-rpc开头的行打印
+
+awk '{print NR,$0}' /etc/passwd|awk '/^1/,/^20/{print $0}'
+筛选第1到第20行打印
+
+awk ‘BEGIN{print length("abc")}’  统计字符长度
+
+awk 'BEGIN{ total=0;i=0;do{ total+=i;i++;}while(i<=100);print total}'
+计算1+..100总和
+
+awk ‘BEGEN{total=0;for(i=1;i<=100;i++)total+=i;print total}’
+结果同上，for（）最多只能添加3个条件
+
+awk 'BEGIN{total=0;for(i=1;i<=100;i++){if(i==50)break;total+=i};print total}'
+计算1+..49总和
+
+awk 'BEGIN{sum=0;for(i=1;i<=100;i++){if(i%2==0)continue;sum+=i}print sum}'
+计算1+..100以内的单数相加总和
+
+awk 'BEGIN{sum=0;for(i=1;i<=100;i++){if(i==66)break;sum+=i}print sum}'
+计算1+..55的总和
+
+awk -F: '{if(NR%2==0)next;print NR,$0}' /etc/passwd
+打印行号以及单数对应的行
+
+【控制语句】
+awk -F: 'if(条件){cmd}else if(条件2){cmd2}else{cmd3}' /etc/passwd
+awk  'while {(条件为真){进入循环}}' /etc/grub2.cfg
+do{cmd；..}while（条件）
+for(expr1;expr2;expr3){statement;..}遍历数组中的元素
+awk {(数值){if(条件)break触发中断}print x}
+awk {(数值){if(条件)con
+tinue触发返回}print x}
+awk -F: '{if($3%2!=0) next触发下一行处理; print $1,$3}' /etc/passwd
+
+【练习】
+生成1000个随机数，用逗号隔开,并用awk算出最大值，最小值
+for i in {1..1000};do if [ $i -eq 1 ];then echo -e "$RANDOM\c" >>f1.txt;else echo -e ",$RANDOM\c" >> f1.txt ;fi;done
+awk -F"," '{i=2;max=$1;min=$1;while(i<=NF){if($i > max){max=$i}else if($i < min){min=$i};i++}}END{print "max="max,"min="min}' f1.txt
+
+--awk数组
+awk '!line[$0]++' f1 去重，只要有相似的行只打打印第一行
+awk 'BEGIN{weekdays["mon"]="Monday";weekdays["tue"]="Tuesday";
+print weekdays["mon"]}' 遍历打印所有数组
+netstat -tan | awk '/^tcp/{state[$NF]++}END{for(i in state) { print i,state[i]}}'以tcp开头统计所有的链接状态，然后统计打印
+
+--awk函数
+wak 'BEGEN{srand（） ；print rand()}' 生成0-1之间的随机数
+awk 'BEGIN{srand();print int(rand()*100)}'
+生成100以内的随机数，int：取整数▲
+srand()  print rand() 0-1随机数
+sub 替换 gsub全局替换
+--例：
+echo "2008:08:08 08:08:08" | awk 'gsub(/:/,"-",$1)' 
+awk 'GEGIN{system("ls /boot")}':调用命令
+
+形参 引用的参数；如x，y
+实参 实际显示的参数；如；var值22
+例：
+func.wak
+function max(x,y){
+x>y?var=x:var=y
+retunrn var
+}
+awk -v i=22 -v j=12 -f func.awk;结果输出22
+
+
+【练习】
+score.txt 统计男生女生平均成绩
+name sex
+a    m    90
+b    f    80
+c    f    99
+d    m     88
+先算总和，在除以数量
+awk '!/^name/{sum[$2]+=$3;num[$2]++}END{for(i in sum){print i,sum[i]/num[i]}}'  score.txt
+
+
+【练习】
+1、文件ip_list.txt如下格式，请提取”.magedu.com”前面的主机名部分并写入到回到该文件中
+1 blog.magedu.com
+2 www.magedu.com
+…
+999 study.magedu.com
+
+awk '{print $2}'>>ip_list
+
+2、统计/etc/fstab文件中每个文件系统类型出现的次数
+awk '/^UUID/{fs[$3]++}END{for(i in fs){print i,fs[i]}}' /etc/fstab
+
+3、统计/etc/fstab文件中每个单词出现的次数
+awk '{i=1;while(i<=NF){word[$i]++;i++}}END{for(num in word){print num,word[num]}}' /etc/fstab
+
+4、提取出字符串Yd$C@M05MB%9&Bdh7dq+YVixp3vpw中的所有数字
+echo "yd$C@M05MB%9&Bdh7dq+yVixp3vpw" | awk 'gsub(/[^[:digit:]]/," ",$0)'
+
+5、有一文件记录了1-100000之间随机的整数共5000个，存储的格式100,50,35,89…请取出其中最大和最小的整数
+
+第一步：用shell构建一个随机数文件
+(echo -n “RANDOM&quot;;for((i=1;i&lt;100;i++));doecho?n&quot;, RANDOM&quot;;for((i=1;i&lt;100;i++)) ; do echo -n &quot;,RANDOM";for((i=1;i<100;i++));doecho?n",RANDOM”;done) > rand100.txt
+思路：第一个数值即是最大也是最小值，后面的循环和它比就好了，循环100次
+
+
+第二步：先确认一下第一个数和最后一个数和变量是否对齐
+awk -F"," ‘{print $1,$100}’ rand100.txt
+
+第三步：写循环
+awk -F"," ‘{max=$1;min=KaTeX parse error: Expected '}', got 'EOF' at end of input: …hile(i<=NF){if(i>max){max=KaTeX parse error: Expected 'EOF', got '}' at position 2: i}?;if(i<min){min=$i};i++;}}END{print "max="max,"min="min}’ rand100.txt
+
+或者↓↓↓
+tr ‘,’ ‘\n’ < rand100.txt |sort -nr
+
+
+
+6、解决DOS攻击生产案例：根据web日志或者或者网络连接数，监控当某个IP并发连接数或者短时内PV达到100，即调用防火墙命令封掉对应的IP，监控频率每隔5分钟。防火墙命令为：iptables -A INPUT -s IP -j REJECT
+7将以下文件内容中FQDN取出并根据其进行计数从高到低排序
+http://mail.magedu.com/index.html
+http://www.magedu.com/test.html
+http://study.magedu.com/index.html
+http://blog.magedu.com/index.html
+http://www.magedu.com/images/logo.jpg
+http://blog.magedu.com/20080102.html
+awk -F"/" '{fqdn[$3]++}END{for(i in fqdn){print i,fqdn[i]}}|' url.txt|sort -k2 nr
+取网址，然后取第二列，倒序排序
+
+8、将以下文本以inode为标记，对inode相同的counts进行累加，并且统计出同一inode中，beginnumber的最小值和endnumber的最大值
+inode|beginnumber|endnumber|counts|
+106|3363120000|3363129999|10000|
+106|3368560000|3368579999|20000|
+310|3337000000|3337000100|101|
+310|3342950000|3342959999|10000|
+310|3362120960|3362120961|2|
+311|3313460102|3313469999|9898|
+311|3313470000|3313499999|30000|
+311|3362120962|3362120963|2|
+输出的结果格式为：
+310|3337000000|3362120961|10103|
+311|3313460102|3362120963|39900|
+106|3363120000|3368579999|30000|
+-----------------------------------
+cat awk.inode 
+
+	NR!=1{
+
+		inode[$1]+=$4
+
+		if(!benu[$1]){benu[$1]=$2}else if(benu[$1]>$2){benu[$1]=$2}
+
+		if(!ednu[$1]){ednu[$1]=$3}else if(ednu[$1]<$3){ednu[$1]=$3}
+
+	}
+
+	END{
+
+		for(i in inode)print i"|"benu[i]"|"ednu[i]"|"inode[i]
+
+	}
+
+
+
+	[root@Cent7 class]# awk -F "|" -f awk.inode inode 
+
+	310|3337000000|3362120961|10103
+
+	311|3313460102|3362120963|39900
+
+	106|3363120000|3368579999|30000
+
+
+
+【加密和安全】
+信息安全防护的目标：
+保密性 Confidentiality
+完整性 Integrity
+可用性 Usability
+可控制性 Controlability
+不可否认性 Non-repudiation
+
+邮件冒充：
+telnet 127.0.0.1 25
+标题hello  域名a.com
+mail from：mayun@alibaba.com
+rcpt to：wang
+内容data
+标题subject：hi
+内容how old are you 
+
+dig -t mx 域名mainbo.com  :邮件服务器查询 
+
+systemctl start telnet.socket 
+
+--centos5 提权：
+yum install gcc
+gcc -w -fPIC -shared -o /tmp/wang /tmp/wang.c
+LD_AUD="$ORIGIN" exec /proc/self/fd/3 $>/dev/null
+
+常用安全技术：认证、授权、审计、安全通信
+密码算法和协议：对称加密，刚要加密、单项加密、认证协议
+
+算法：公开
+秘钥：不公开
+对称加密：加密和解密使用同一个密钥
+特性：
+1、加密、解密使用同一个密钥，效率高
+2、将原始数据分割成固定大小的块，逐个进行加密
+缺陷：
+1、密钥过多
+2、密钥分发
+3、数据来源无法确认
+
