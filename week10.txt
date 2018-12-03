@@ -1,0 +1,860 @@
+
+----------------------------------------------------------------------I
+第二十八节课 2018年11月26日  周一
+----------------------------------------------------------------------I
+【MYSQL数据库】
+DBMS 数据库管理系统 database management system
+DBA：负责数据库的规划、设计、协调、维护和管理等工作
+(数据库管理员↑)
+
+数据：定义-处理-安全-备份-集群
+萌芽：文件系统，使用磁盘文件存储数据
+初级：网状数据库(复杂，条理不清晰)，层次数据库(1对多，有冗余数据)
+中级：关系数据库和结构化查询语言
+高级："关系-对象"型数据库
+数据库系统的架构：
+单机架构/大型主机/终端架构
+主从式架构（C/S）_目前主流/分布式架构
+
+--文件管理系统的缺点
+编写应用程序不方便；冗余；应用程序依赖性；不支持并发访问；
+数据关联若；无法按用户试图表示数据；无安全控制功能
+
+--关系型数据库
+关系 ：关系就是二维表，其中：表中的行、列次序并不重要
+行row：表中的每一行，又称为一条记录
+列column：表中的每一列，称为属性，字段
+主键（Primary key）：用于惟一确定一个记录的字段 pk
+#一个表只有一个主键，但可关联到多个字段（列），也叫复合主键
+#表中不会出现相同的一行记录，避免冗余数据
+域domain：属性的取值范围，如，性别只能是‘男’和‘女’两个值
+
+关系数据库：
+优点：安全可靠，一致，稳定，并发访问，相互关联，较少冗余
+缺点：扩展性差，性能达到一定规模很难保证
+数据库排名：db-engines.com/en/ranking
+RDBMS：
+mysql：mysql，mariaDB，percona server 开源 
+oracle ； mssql ； postgreSql ； DB2
+非关系型数据库：no only sql 基于内存，访问速度快，扩展性强
+
+联系类型：
+1对1 ： 主外键
+1对多 ： 构建第三张表
+多对多 :  通过第三张表分别和原来两张表实现主外键
+#foreign key ：外键 fk
+数据的操作：数据提取：select
+                   数据更新：insert、delete、updata
+数据的约束条件：一组完整性规则的集合
+#实体（行）完整性  entity integrity 主键表实现
+#域（列）完整性 domain integrity  取值范围实现
+#参考完整性  referential integrity  
+ 
+简易数据规划流程：
+第一阶段：收集数据，得到字段
+第二阶段：把字段分类，归入表，建立表的关联
+第三阶段：规范化数据库
+
+范式 (避免冗余数据)
+1NF ：无重复列
+2NF：属性完全依赖于主键，基于前面范式
+3NF：属性不依赖于其它非主属性，基于前面范式 
+
+--SQL 概念
+SQL: Structure Query Language
+结构化查询语言
+
+约束（显示数据遵守某些规则，保证数据正确，合理）
+主键  一个或多个字段的组合；字段不能为空  pk
+唯一键  一个或多个字段的组合；允许为空；uniq key=uk
+外键：一张表依赖另一张表（主键/唯一键）的关系；foreign key=fk 
+检查：字段值在一定范围内
+
+基本概念
+索引：将表中的一个或多个字段中的数据复制一份另存，并且按特定次序排序存储（按顺序排序，适用于大量数据，方便查找）
+关系运算：
+选择：挑选出符合条件的行
+投影：挑选出需要的字段
+连接：表间字段的关联（主外键）
+
+--数据模型  
+raw裸文件系统（101010...）效率更高 
+数据抽象：
+物理层：数据存储格式，即RDBMS在磁盘上如何组织文件
+逻辑层：DBA角度，描述存储什么数据，以及数据间存在什么样的关系
+视图层：用户角度，描述DB中的部分数据
+关系模型的分类：
+关系模型
+基于对象的关系模型
+半结构化的关系模型：XML数据(扩展到标记语言)
+
+官方网址：
+https://www.mysql.com/
+http://mariadb.org/
+https://www.percona.com
+官方文档
+https://dev.mysql.com/doc/
+https://mariadb.com/kb/en/
+https://www.percona.com/software/mysql-database/percona-server
+
+MYSQL的特性
+插件式存储引擎：也称为“表类型”，存储管理器有多种实现版本，功能和特性可能均略有差别；用户可根据需要灵活选择,Mysql5.5.5开始innoDB引擎是MYSQL默认引擎
+MyISAM ==> Aria
+InnoDB ==> XtraDB
+单进程，多线程
+诸多扩展和新特性
+提供了较多测试组件
+开源
+
+--隐藏开机界面用户名 centos6
+cd /etc/gconf/gconf.xml.defaults/
+vim %gconf-tree.xml
+/user_list  搜索该字符，定位↓
+<default type ="bool" value="false"/> false改成true
+
+--安装mysql
+1、源代码：编译安装
+2、二进制格式的程序包：展开至特定路径，并经过简单配置后即可使用
+已编译完，并且打包好的二进制文件，处理已编译，其他同上
+3、程序包管理器管理的程序包
+
+rpm安装mysql-server （centos6）▲  3306端口  mysqld 
+yum install mysql-server -y
+mysql_secure_installation 安全设置
+#/etc/rc.d/init.d/mysqld 服务启动脚本
+#/user/libexec/mysqld 主程序
+#/etc/my.cnf  配置文件（可充当服务器/客户端 配置文件）
+#/var/lib/mysql/ 数据库路径
+#/var/log/mysqld.log 日志文件
+
+preinstall 安装脚本
+mysql -u root（不敲默认root） -p -S /var/lib/mysql/mysql.sock
+登录root账号用sock连接myql数据库   -p(password)   -S(sock)
+mysql 默认登录 ↑同上
+vim /etc/my.cnf  更改提示符保存到配置文件
+添加语句块
+[mysql]  客户端配置 （mysqld是服务器配置）
+prompt='\u@[\D]>' 
+mysql  -uroot -pcentos -h192.168.34.7 远程连接到7的数据库
+
+
+rpm安装mysql-server （centos7 ）▲
+yum install mariadb-server  -y 
+#/etc/my.cnf.d/server.cnf 服务器配置文件
+#/usr/lib/systemd/system/mariadb.service 服务名
+#/usr/libexec/mysqld 服务器主程序
+#/etc/my.cnf.d/ 配置文件
+#/var/log/mariadb/mariadb.log  日志文件
+#/var/lib/mysql 数据库数据
+
+systemctl start mriadb 启动服务
+system hostaneme 查看主机
+mysqladmin ping  查看数据库是否活动
+mysqladmin shutdown 停止服务
+mysqladmin status 查看状态
+mysqld_multi 多实例 多进程
+rm -rf /var/lib/mysql/*  删除数据库信息，重启服务可重新生成
+vim /etc/my.cnf.d/mysql
+vim /etc/my.cnf.d/mysql-clients.cnf 更改提示符保存到配置文件
+# prompt='\u@[\D]>' 
+&:任意字符   _任意单个字符  服务器端命令：加；结束
+mysql用户账号组成：'username'@'host'
+例：user@192.168.34.%
+
+--客户端命令：
+mysql  默认root登录
+>status 或 \s  查看状态
+>prompt mysql -->  更改提示符为-->
+>prompt \u@[\D]  更改提示符为用户+完整时间
+>use mysql  切换mysql数据库；类似cd
+>help show 查询show命令用法
+
+
+>show databases; 查目前支持的数据库；数据库列表
+>select version(); 查看当前数据库版本信息
+>select user(); 查当前登录用户信息
+>select database(); 查当前在哪个数据库 
+>show engines; 查询引擎 
+>show tables;  显示当前数据库中包含数据列表
+(ls /var/lib/mysql/mysql 对应当前mysql数据库列表↑↑)
+>show tables form test;
+>show databases; 查看当前数据库文件
+>desc user; 查看当前列表的字段
+>select user,host.passwd from user;查询当前账号信息
+mysql < test.sql  命令行添加文本方式执行，并显示结果
+vim test.sql
+select now();
+showdatabases;
+或↓↓↓
+source test.sql  登录mysql账号后执行文本命令，结果同上
+mysql -e 'show database' 命令行直接执行
+
+mysql_secure_installation   安全加固，及口令设置
+请出入当前口令？
+是否设置root口令？    
+是否移除匿名用户？ 
+是否禁用远程登录？
+是否删除test数据库？
+是否从新加载特权表？  让权限立即生效？
+
+mysql -p：口令  登录
+select user,host,password from user;查询账号信息
+(用户名+主机名)  mysql控制登录在某主机的用户功能，默认本地连接
+mysqladmin ping
+mysqladmin shutdown 关闭数据库服务
+sysqladmin status
+ps aux
+完整的用户信息 = 用户名@主机名
+>user@192.168.34.%  允许远程某些主机的IP登录
+_任意的单个字符
+重定向执行命令  ↓（也支持管道）
+vim test.sql
+#show databases;
+#use mysql
+mysql < test.sql 
+mysql -e 'show databases' 也支持
+>source  test.sql 也支持
+mysql -D mysql  切换到mysql数据库
+
+mysql客户端可用选项：
+-A, --no-auto-rehash 禁止补全
+-u, --user= 用户名,默认为root
+-h, --host= 服务器主机,默认为localhost
+-p, --passowrd= 用户密码,建议使用-p,默认为空密码
+-P, --port= 服务器端口
+-S, --socket= 指定连接socket文件路径
+-D, --database= 指定默认数据库，相当于use xx
+-C, --compress 启用压缩
+-e “SQL“ 执行SQL命令
+-V, --version 显示版本
+-v --verbose 显示详细信息
+--print-defaults 获取程序默认使用的配置
+>mysql --print-defaults -v  显示配置信息
+
+--启用网络特性（端口会关闭；维护时可用）
+vim /etc/my.cnf
+[mysqld]
+skip-networking 或 skip-networking=1 
+服务重启生效（1/on/true启用  0/off/false禁用）
+
+--创建逻辑卷，并迁移数据库 (/data/mysql数据库路径)
+fdisk  /dev/sda
+#n +1G t 8e  w
+partprobe 同步
+pvcreate  /dev/sda6   
+vgcreate vg0 /dev/sda6
+lvcreate -n mayql  -l 100%FREE vg0
+mkfs.xfs /dev/vg0/mysql
+blkid 查看文件系统
+mkdir /data/mysql
+mount /dev/vg0/mysql /data/mysql （保存要写入/etc/fstab文件）
+chown mysql.mysql /data/mysql
+vim /etc/my.cnf
+#datadir=/data/mysql
+systemctl restart mariadb  重启服务
+ls /data/mysql 查看是否迁移
+
+--通用二进制格式安装 mariadb-10.2.19 (以编译好的)▲34.17
+(移除mysql，mariadb-hserver）
+通过mariadb.org网站下载
+tar xf mariadb-10.2.19-linux...tar.gz  -C /usr/local 解压到该目录
+ln -s /usr/local/mariadb-10.2.19-linux...  /usr/local/mysql
+ --prefix=/usr/local/mysql (程序文件所在路径)
+chown -R root.root  /usr/local/mysql/  给程序目录添加权限
+useradd -r -s /sbin/nologin -d /data/mysql -C 'mariadb user'  mysql
+创建用户及相关属性
+install -d /data/mysql  -o mysql -g mysql 创建目录和设置权限
+cd /usr/local/mariadb-10.2.19-linux-x86_64/▲
+scripts/mysql_install_db --user=mysql --datadir=/data/mysql
+生成数据库并制定数据目录和用户目录
+mkdir /etc/mysql ;
+cp support-files/my-huge.cnf  /etc/mysql/my.cnf 复制配置文件
+ls support-files/  查看数据库支持模板
+---------------------------------------
+vim /etc/mysql/my.cnf
+[mysqld]
+#datadir=/data/mysql  只增加这一项▲
+#socket= /data/mysql/mysql.cock
+[client]
+#socket=  /data/mysql/mysql.cock
+-------------------------------------------
+cp support-files/mysql.server  /etc/init.d/mysqld  复制程序
+chkconfig --add mysqld 添加服务
+service mysqld start  启动服务
+echo 'PATH=/usr/local/mysql/bin:$PATH' >/etc/profile.d/mysql.sh
+添加到变量 ;  
+. /etc/porile.d/mysql.sh 生效
+mysql
+>select @@datadir;   数据库路径
+>show varibles like 'datadir';  同上
+>show databases;  查询数据库
+>select @@prot  查看服务的端口
+>use mysql
+>desc user;  查询user的表结构
+>select user,host,password  from user; 查询用户密码
+
+cd /usr/local/mysql/support-files/
+mysql_secure_installation 添加安全脚本
+
+--语言规范
+sql标准：
+/* */ 多行注释；--  单行注释（有空格）
+mysql标准：（都支持）
+#
+命名规则： 字母开头，中间建议只加下划线 _
+不要使用MySQL的保留字 
+如：show status select..
+同一个database，对象不能同名
+
+sql语句分类：
+数据定义：create；drop 删除；alter 修改
+数据操纵：insert增；delete 删；update改
+数据控制：grant授权；revoke取消授权
+	commit确定，rollback取消确定（管理事物）
+数据查询：select 查询
+
+------------------------- ---------------------------------------------I
+第二十九节课 2018年11月28日  周五
+-----------------------------------------------------------------------I
+
+--源码编译后多实例配置  /mysql  所有实例根目录▲
+/app/mysql/bin  二进制数据库路径
+多实例：3306 3307 3308端口
+systemclt stop mariadb 先停服务 ▲
+工作目录：mkdir  /mysql/{3306.3307,3308} 数据库相应文件
+cd /data/mysql
+mkdir  -P mysql {3306.3307,3308}/{etc,log,pid,socket}
+chown -R mysql.mysql /mysql
+cd /app/mysql/scripts  生成数据库文件 
+./scripts/mysql/install_db  --user=mysql --datadir=/mysql/3306
+./scripts/mysql/install_db  --user=mysql --datadir=/mysql/3307 
+./scripts/mysql/install_db  --user=mysql --datadir=/mysql/3308
+安装mysq文件
+cp /etc/my.cnf   /mysql/3306/etc/  准备数据库配置文件
+vim /mysql/3306/etc/my.cnf  更改配置文件
+[mysqld]
+port=3306
+datadir;/mysql/3306/
+socket =/mysql/3306/socket/mysql.sock
+[mysqld_safe]
+log-error=/mysql/3306/log/myradb.log
+pid-file=/mysql/3306/pid/mariadb.pid
+cp /mysql/3306/etc/my.cnf  /mysql/{3307,3308}/etc/
+3307 3308 都复制配置文件，并修改端口
+vim my.cnf  ;    %s/3306/3307 
+vim my.cnf  ;    %s/3306/3308 
+rz 复制mysqld启动脚本（适用于启动数据库脚本）▲
+cp mysqld  /mysql/{3307,3308}/  复制启动脚本到数据库目录
+vim mysql/3306/mysqld
+prot=3306
+mysql_user=""
+cmd_path="/qpp/mysql/bin"
+mysql_basedir="/mysql"
+3307,3308再依次修改mysqld脚本端口并且加执行权限即可
+ss -ntl 查看3306端口，是否关闭
+./mysql/{3306,3307,3308}/mysqld start 分别启动服务脚本并验证端口▲
+mysql -uroot -p -s  /mysql/3308/socket/mysql.sock 通过端口登录
+或 mysql -uroot -h127.0.0.1 -P 3308  通过tcp/ip登录
+/mysql/3308/mysqld stop 停止服务（脚本要加centos口令）
+/mysql/3308/mysqld start 启动服务
+select user,password,host from mysql.user;
+查看该表口令
+mysql_secure_installtion  更改口令（默认是修改源码编译的mysql）
+cd /mysql/3308/ 
+mysql_secure_installtion -S /mysql/3308/sock/mysql.sock 改3308口令
+mysql -uroot -h127.0.0.1 -P 3308 -pcentos （口令centos）
+ 登录验证！！
+把启动脚本分别复制到 /etc/init.d/mysqld3307|3308|3306
+后面可通过service mysqld3306 启动和关闭
+cd /mysql/3308 ; 
+vim mysqld ; 添加 chkconfig:345(模式)  80(启动顺序)  2(关闭顺序)
+chkconfig --add  mysqld3308 添加到开机启动
+---------------------------------------
+让配置文件不显示到数据库文件列表↓↓↓
+cd /mysql/3307
+./mysqld stop 停服务
+mv mysqld  etc/  /mnt ▲ （只保留这两，其余删除，通过安装再生成↓）
+./scripts/mysql_install_dab --user=mysql  --/mysql/3307/data 
+vim /3307/my.cnf 修改配置文件的路径端口等信息
+mv /mnt/etc/  mnt/mysqld  mysql/3307/
+mysql -uroot -h127.0.0.1 -P 3307  或↓
+mysql_secure_installtion -S /mysql/3307/sock/mysql.sock
+
+-------------------------------------------------------------------
+--数据变型
+tinyint:1字节  smallint:2字节  mediumint:3字节 int:4字节 bigint:8字节
+unsigned：整数 float：浮点数  decimal：定点数   text文本
+M精度 D标度(小数位)  例：float（3,2） 123.45 
+char：定长4字节(不够填充0)  varchar：变长(字符+1)
+
+--修饰符
+NULL 空值 ； NOT NULL 非空值 ；DEFAULT 默认值 
+PRIMATY KEY 主键；UNIQUE KEY 唯一值 ；
+CHARACTER SET name   指定字符集
+AUTO_INCREMENT 自动递增（整数） 
+UNSIGNED 无符号  ENUM枚举 例：enum（'m','f'）
+
+--数据库操作  推荐：utf8mb4 字符集 (34.17)
+>show databases;  查看数据库列表
+>create database testdb; 增
+>drop database testdb;   删
+>show create database testdb; 可查看testdb用的字符集
+>create database db_utf8mb4 CHARACTER SET=utf8mb4; 
+>show charecter set; 查看系统支持字符集
+>show collation; 查看排序规则
+
+--创建表
+>create database studentdb;创建数据库
+>use studentdb; 切换到该数据库
+>create table student (id int unsigned auto_increment primary key,name varchar(10) not null,sex enum('m','f') default 'm',age tinyint unsigned,mobile char(11),address varchar(50)); 创建表
+>desc student; 显示该表结构 
+>show columns from student; 同上
+>show create table student; 查看该表类型，字符集类型
+>show create database studentdb; 显示数据库信息
+>drop table student; 删除表
+>show table status like 'student'\G; 查看表属性（换行显示）
+>show table status from mysql\G;  显示某个库所有表（换行显示）
+
+--表操作
+>show indexes from student\G;  查看索引
+>select count(*) from student;  当前表记录数
+>insert into(可不写) student (name,age,mobile,address) values ('mage',30,10086,'beijing') ..
+('zhangsir'28,10010,'zhenzhou') 创建两条记录
+>select * from student; 查看当前表所有内容
+>create table employee select * from student;
+创建employee，克隆student表及数据
+>create table custom like student; 复制student结构，不复制数据
+>insert student set name='wang',age=18,address='beijing';
+对student表插入记录赋值1
+insert student (age,name,mobile,address) values (20,'zhao',null,'shanghai');
+对student表插入记录赋值2
+>insert custom select * from student; 
+插入custom，选择student表数据(表结构应该一致)
+cd 
+>use db_utf8mb4
+>create table student like studentdb.student; 
+复制studentdb数据库的表结构
+>desc student 查看当前表结构
+>show create table student; 显示指定表
+>show tables; 显示当前库所有表
+>alter table student CHARACTER SET = utf8mb4; 更改表字符集
+>show create table student; 查看表  
+>insert student (name,age,address) values('杜甫',22,'杭州');
+>status 查看（客户端编码不一致，导致汉字无法显示）
+>insert student select * from studentdb.student;
+>select * from student;
+
+创建表并且，修改字符集utf8mb4
+ CREATE TABLE `t2` (
+  `id` int(10) unsigned NOT NULL DEFAULT '0',
+  `name` varchar(10)  NOT NULL,
+  `sex` enum('m','f')  DEFAULT 'm',
+  `age` tinyint(3) unsigned DEFAULT NULL,
+  `mobile` char(11)  DEFAULT NULL,
+  `address` varchar(50)  DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 
+>use db_utf8mb4 
+>create table student like studentdb.student; 创建新表继承上表属性
+>alter table student 修改student表
+>insert student (name.age.address) values ('杜甫',22,'杭州')；
+>delete from student where id >=5; 删除大于等于5的记录
+>truncate table student; 清空表，不记录日志
+>update student set name='bbb' where id=5; 修改id为5的记录
+#mysql -U  不加where不让删除(updata和delete category触发使用)
+[safe-updates 加到mysql客户端文件也可生效]
+#mysql --help 查看帮助
+
+5.5数据库：xx.frm(表定义)  ibdata1 (数据)
+10.2数据库：xx.frm   xx.ibd  
+vim/etc/my.cnf （5.5老版本）
+innodb_file_per_table  数据会单独存放▲
+
+vim /etc/my.cnf
+character-set-server=utf8mb4  更改字符集到配置文件▲
+vim /etc/my.cnf.d/mysql-clients.cnf
+default-character-set=utf8mb4 更改字符集到客户端配置文件▲
+字符集
+
+--表格处理和查找
+>use studentdb
+>select * from student
+>select * from student where age>=25 and age <=28; 
+>show table status like 'student'\G; 显示表属性
+>show create table t2; 查询表结构
+>create table t1(id int,name char(3))  创建表
+>show create table t1;  查看表
+>desc t1; 查看t1表结构
+>insert t1 values(1,'王'); 插入数值
+>select * from t1; 查看t1表数据
+-------
+--delete (删除数据，不删除表结构)
+>delete * from student; 删除student表，记录日志
+>truncate table student; 清除表，不记录日志
+>insert t2  (name,age,address) values ('马哥',22,'北京'); 删除记录
+>delete from student where id >= 5 ; 删除id大于等于5的记录
+>select * from student;
+>select id,name,age from student; 显示student的id，name，age字段 
+>select name as 姓名 ,id,age from student; 显示name为姓名（别名）
+>select * from student where age > 25; 年龄大于25
+>select * from student where age >= 25 and age <=28; 大于或小于
+> select * from student where age between 25 and 28;  25-28之间
+>select * from student where age in (20,30,40);  查找20,30,40
+>   查找空数值
+>select * from student where mobile is not null；查找非空数值
+>select * from student where name where name like '%a%';
+包含a的字符 ； a% ：a开头的数值  .....
+>select * from student where name rlike '^a'; 正则表达式，a开头数值
+  （模糊匹配尽可能不用，影响服务器性能）
+>insert student (name,sex,age) values ('xieshanshan','xx',20);
+>update student set sex='f' where id=5; 添加性别
+>select distinct sex from student; 显示不同的性别（参数）
+
+--SELECET
+<=> 相等或为空； <> 不等于 not null ; and并且 ; or与或 ; xor异或
+group 把查询结果分组用于聚合运算 group by
+avg();max();min();count(),sum()
+having:对分组聚合运算后的结果指定过滤条件
+order by：根据指定的字段对查询结果排序；asc升序；desc；降序
+limit：对输出结果行数进行数量限制
+for update：写锁，只有一个读和写
+lock in share mode：读锁，共享锁，同时多个读
+
+rz hellodb_innodb.sql添加数据库
+mysql < hellodb_innodb.sql 导入数据库
+>use hellodb
+>show create database hellodb;
+>show tables;
+>select count(*) from student; 统计有多少条记录
+>select gender as 性别,count(*) as 人数 from student group by gender ； 按性别区分，统计人数总数
+>select gender,avg(age) from students group by gender;
+按性别区分，统计平均年龄
+>select classid,gender,max(age) from students group by classid,gender;
+选择3个组，根据班级和性别，分组统计最大年龄[classid gender max]
+>select gender,avg(age) from students group by gender having gender='m';
+选择2个组，先根据性别分组，再过滤男生，计算平均年龄
+>select gender,avg(age) from students where gender='m' group by gender; 
+选择2个组，先过滤男生，再分组，计算平均年龄
+group by  (分组)+having▲ 
+where + gender (过滤) ▲
+>select classid,count(*) from students where classid no null group by classid;
+选择1个组，先过滤chlassid不为空的，根据classid计算人员总数
+>select classid,count(*) from students where classid no null group by classid having classid >=3;
+选择1个组，先过滤chlassid不为空的，根据classid计算人员总数，在删选classid>=3的班级
+>select *from students order by age desc;  根据age从倒叙排序
+>select *from students order by age asc;  根据age默认排序
+>select *from students order by age asc limit 3,4; 跳过前3个，取后4个
+>select * from students order by classid ,age desc; 
+先班级id排序，然后年龄倒叙排序 
+>select * from students order by -classid desc; 年龄排序；NULL排最后
+>select * from students order by age asc; 根据年龄排序_不加asc也行
+>select * from students order by age desc;根据年龄倒序排
+>select * from students order by age asc limit 3; 取前三个
+>select * from students order by age asc limit 3，4; 跳过前3，取后4个
+>select * from students order by -classid , age desc;
+先对classid排序（其中null值排最后），再对age倒序排序
+>select stuid as 编号,name as 姓名,age as 年龄 from students;
+先分别对stuid，name，age编号子啊取值
+
+
+--练习
+导入hellodb.sql生成数据库
+(1) 在students表中，查询年龄大于25岁，且为男性的同学的名字和年龄
+select name,age from students where  gender = 'm' and age >25 ;
+
+(2) 以ClassID为分组依据，显示每组的平均年龄
+select classid,avg(age) from students group by classid having avg(age);
+
+(3) 显示第2题中平均年龄大于30的分组及平均年龄
+select classid,avg(age) from students group by classid having avg(age) > 30;
+
+(4) 显示以L开头的名字的同学的信息
+select  * from studens where name like 'L%' ; 
+
+(5) 显示TeacherID非空的同学的相关信息
+select * from students where teacherid is not null;
+
+(6) 以年龄排序后，显示年龄最大的前10位同学的信息
+select * from students group by age desc limit 10;
+
+(7) 查询年龄大于等于20岁，小于等于25岁的同学的信息
+select * from students where age between 20 and 25;
+
+【多表操作】
+--union 纵向合并
+>select stuid,name,age,gender from students
+->union
+->select * from teachers;
+选择四个字段，students和teachers表纵向合并
+
+>select * from t2 unino select * from t2 unino  自己跟自己合并去重
+>select distinct * from t2; 去重标准写法
+
+--cross join  横向合并（字段合并，也叫交叉连接）
+>select * from students cross join teachers;
+(字段叠加，左边每条记录分别和右边每条记录依次合并，但意义不大)
+
+
+内连接_常用，左外链接，右外连接，合并去重，合并去掉重复，自连接
+--内连接【A|B 取交集】
+>select * from students,teachers where students.teacherid=teachers.tid;
+-----《两条命令显示结果一样↑↓》
+>select * from students inner join teachers on students.teacherid=teachers.tid;
+students和teachers表合并，取交集
+
+>update students set teacherid=1 where stuid=25;
+更新students表中teacherid=1的记录，使其studi=25
+
+>select stuid,s.name as student_name,tid,t.name teacher_name from students as s inner join teachers t on s.teacherid=t.tid;
+student表和teachers分别取别名s和t，并且合并表取交集
+（交互操作取别名后，不能再引用原始名称）▲▲▲▲
+
+--外连接 【A全部都要，B只取相同条件的记录，合成完整记录】
+ >select * from students as s left outer join teachers  t on s.teacherid=t.tid;  左外连接
+显示students.teacherid全部，并取teachers.tid与之相同的记录
+
+ >select * from students as s right outer join teachers  t on s.teacherid=t.tid;  右外连接
+显示teacherid.tid全部，并取students.teacherid与之相同的记录
+
+--左外链接+去掉交集
+ >select * from students as s left outer join teachers  t on s.teacherid=t.tid where t.tid is null;
+--右外链接+去掉交集
+ >select * from students as s left outer join teachers  t on s.teacherid=t.tid where s.teacherid is  null;
+
+--子查询（查询语句里面嵌入另外的语句）
+>select * from teachers where age>(select avg(age) from students);
+显示大于平均年龄的记录
+
+--完全外连接（合并去重） mysql数据库不支持▲
+#select * from students full outer join teachers on students.teacherid=teachers.tid;
+>select * from students as s left outer join teachers  t on s.teacherid=t.tid 左外链接
+->union 列合并
+->select * from students as s right outer join teachers  t on s.teacherid=t.tid; 右外连接
+
+--完全外连接（去掉交集）
+select * from  (select stuid,s.name as student_name,s.age as student_age,s.gender as student_gender ,classid,teacherid,tid,t.name as teacher_name,t.age as teacher_age,t.gender as teacher_gedner 
+from students as s  left outer join teachers  t on  s.teacherid=t.tid  
+union  
+select stuid,s.name,s.age,s.gender,classid,teacherid,tid,t.name,t.age,t.gender from students as s right outer join teachers  t on  s.teacherid=t.tid) 
+as f  where f.teacherid is null or f.tid is null;
+
+--练习_显示姓名+领导名称
+>create table hellodb.emp (id int,name char(3),leaderid int);
+>use hellodb
+>insert emp value(1,'马永亮',null);
+>insert emp value(2,'张冠宇',1);
+>show warnings; 可显示故障信息
+> insert emp value(3,'wan',2),(4,'yan',3);
+>select a.name,b.name from emp as a left outer join emp as b on 
+a.leaderid=b.id;
+单张表左外连接+取交集（as可不加，outer可不加）
+
+use hellodb ; courses/scores/students 
+学生姓名，考试科目，考试成绩
+select st.name,sc.courseid,sc.score from students as st inner join scores as sc on st.stuid=sc.id;
+根据students和scores表，取id交集并显示姓名/科目id/成绩
+select st.name,co.course,sc.score from students as st inner join scores as sc on st.stuid=sc.id inner join courses as co on sc.courseid=co.courseid;
+根据students和scores表和courses表，取id交集，并显示姓名/科目/成绩
+	
+--------------------------------------------------------------------------I
+第三十节课 2018年11月31日  周五
+--------------------------------------------------------------------------I
+--视图   view
+特性：VIEW,虚表；保存实表的查询结果；
+	视图本身不存数据；
+	只保留表结构,可隐藏表真实情况，敏感数据；
+	对视图操作实际是对表操作；
+>use hellodb
+>create view v_students as select stuid,name,age from students;
+ 生成视图,取students表的stuid，name，age字段
+>show table status like 'v_students'\G  查看视图/表状态
+>show create view v_students\G 显示表定义
+>desc v_students;  查看视图结构
+>select * from v_students; 查看视图（已隐藏表结构信息）
+>insert v_students values(26,'wang'.30); 可对视图添加记录
+>create view v_old_sutdents as select stuid,name,age from students where age >50;   创建视图，添加50以上的记录
+>select * from v_old_students; 
+>insert v_old_students values(27,'li',20)  
+插入记录，但视图只显示50以上记录，实际信息添加在表里
+>select count(stuid) from students; 统计行记录，null值不算在内
+
+--函数 function（系统内置函数@@  自定义函数 UDF ）
+函数不能独立使用，必须嵌入到sql语句
+跨数据库调用函数，要指定数据库名
+具体要传递参数==实参
+定义函数用的参数名==形参
+>create function simpleFun() returns varchar(20) return "hello";
+创建无参数定义的函数
+>select simpleFun(); 显示函数
+>show function status\G  查看函数列表
+>show create function simpleFun 查看函数定义
+>drop function simplefun; 删除函数
+
+>SELECT function_name(parameter_value,...)  定义语法
+>DELIMITER // （把//作为执行命令的语句）
+***...
+>END //
+>DELIMITER ; 重新设为；为结束符
+局部变量（内部），当前命令有效  BEGIN....END，调用完就结束
+会话变量  ；>select @a  会话有效，退出，换窗口无效
+ >set a=10 局部变量  
+ >set @a=10 会话变量  
+
+
+--存储过程  procedure
+存储过程保存在mysql.proc表中
+可作为独立命令直接执行
+例：delimiter //
+CREATE PROCEDURE showTime()
+BEGIN
+SELECT now();
+END//
+call showtime;  执行结果显示系统时间
+show procedure status\G 显示列表状态
+show create procedure showtime\G 显示定义的函数
+
+例：delimiter //
+create procedure selectbyid(in uid smallint unsigned)
+begin
+select * from students where stuid = uid ;
+end//
+delimiter ;
+call selectbyid (20);
+concat ('wang',1),i )：把字符根数字关联 例；wang1 1；wang2 2..
+
+show create procedure name
+
+触发器  tigger
+BEFORE | AFTER  事件前触发，事件前后触发，基于表
+例：
+create
+[definer = { user | current_user }]  指定那个用户执行
+trigger tigger_name   指定触发器名称
+tigger_time trigger_event 指定触发的动作
+on tbl_name for each row   该触发器作用的表名 及 触发行
+trigger_body
+show triggers\G 查看触发器
+drop trigger grigger_name; 删除触发器
+
+--用户和权限管理 identified
+>create user test@'192.168.34.%' identified by 'centos';
+创建用户，只允许在192.168.34网段登录test（只能连，做不了操作）
+6>mysql -utest -pcents -h192.168.34.7  
+远程登录34.7数据库
+>select user();  显示创建的用户
+>drop user ''@'localhost'; 删除匿名用户账户
+>rename old_user_name to new_uer_name 改名
+
+>flush privileges; 刷新权限才生效↑↑↑
+#mysqlsdmin -u root -poldpass password 'nwepass'  命令行变更口令
+6>mysql -utest -pcentos -h192.168.34.7  登录测试
+>select user,host,password from user; 查看当前数据库用户use mysql
+
+> create user root@'192.168.34.%' identified by 'centos';
+创建用户及口令（普通用户，权限小）
+>update mysql.user password=password('password ') where user='root'; 变更mysql数据库所有root用户的口令
+>flush privileges; 生效账户
+>select user;host,password from user; 查看账户信息
+vim /etc/my.cnf
+[mysqld]
+skip-grant-tables  忽略授权表（可免密登录）
+重启服务生效
+>update mysql.user set password=password('magedu') where user='root';  然后再重新更变口令
+注释配置文件#skip-grant-tables ; 重启服务，再登录 
+
+--用户和权限grant管理类
+--程序类 function，procedure，trigger
+--库和表级别：databse，table
+alter；create；create；drop；index；show view； grant 授权；
+ grant otion（转赠权限）；
+>grant all on hellodb.*  to test@'192.168.34.%' ;
+授权helloddb的所有表的test用户所有权限
+>show grants fro test2@'192.168.34.%'\G 查看授权
+>grant select (name,age) on hellodb.students to test2@'192.16.34.%' identified by 'centos';
+授权test@192.168.34%用户对students表的name，age字段查询权限
+>grant all on *.* to test3@'192.168.34.%' indentified by 'centos'
+ 授权test3管理员权限
+>revoke select on *.* from test3@'192.168.34.%';
+取消用户查询授权
+>show grants for test3@'192.168.34.%'\G 查看当前用户权限
+>show grants fro current_user() ; 查看当前用户权限
+>flush privileges 重读进程生效权限
+
+--存储引擎对比
+myisam : innodb
+存储限制 256TB ：64TB
+事物        no： yes  （事物回滚没有执行成功的命令）
+locking granularity  table表 ： row行  （锁定颗粒度）
+MVCC时间戳  no  ： ues（多版本并发控制机） 
+data caches  no : yes
+index caches yes : no
+foreign key support no : yes  （外键）
+事物编号，创建/更改后的时间戳
+能看到的记录：删除或创建的时间小于或者等于当前时间，才能看到
+类似快照，记录时间之前的事物都能被发现。 myisam不支持
+
+MyISAM存储引擎适用场景
+只读（或者写较少）、表较小（可以接受长时间进行修复操作）
+tbl_name.frm 表格式定义
+tbl_name.MYD 数据文件
+tbl_name.MYI 索引文件
+
+innodb
+tbl_name.frm  表格式定义
+tbl_name.ibd 索引+数据	ibdata1
+
+>create database db1;
+create table t1 (id int);
+>show table status like 't1'\G 查看列表属性
+[mysqld]
+vim /etc/my.cnf   设置innodb为默认引擎▲新版本默认不用加
+default-storage-engine=innodb
+>show engines; 查看引擎验证
+
+[mysqld] 每个表单独使用一个表空间存储表的数据和索引
+inodb_file_per_table=ON 
+重启服务生效
+
+--服务器配置
+mysqld选项；服务器系统变量；服务器状态变量
+选项：能写到配置文件,能永久保存，不可通过show命令查看
+（支持下划线和横线）
+
+show variables like  'innodb_file_per_table' 变量可以查;
+show variables like '%character%' ；查看带该关键字的变量
+变量一般都是下划线
+全局变量：支持当前数据库 show global varibles;
+会话变量：支持当前会话  shhow session varibles; ( @ 自定义变量 )
+系统变量：delect @@variables;  （@@系统自带变量）
+
+修改全局变量：SET @@global.system_var_name=value;
+修改系统变量：SET @@[session.]system_var_name=value;
+commandine：服务器选项
+global：全局变量
+>set global max_connetctions=2000
+>show variable max_connetctions
+
+redo重做 undo撤销  事物中
+
+--查询缓存（query cache）
+读得多，写得少，适合利用缓存
+sql 语句完全一致，区分大小写，通过hash查询
+哪些查询可能不会被缓存
+SQL_NO_CACHE
+
+query_cache_type：是否开启缓存功能
+query_cache_size：缓存可用空间，最小值40k
+query_cache_min_res_unit： 缓存块最小分配单位，默认4k
+query_cache_min_res_limit：单个查询结果能缓存的最大值，默认1M
+query_cache_wlock_invalidate
+如果某表被其它的会话锁定，是否仍然可以从查询缓存中返回结果，默认值为OFF，ON表示不允许
+>set global query_cache_size=1024000; (1M) 写入文件可用M
+>show variable like 'query_cache%';
+
+
+
+--索引 explain
+数据量大，读的数据比较多
+B数： 两个分叉
+红叉：每个索引有两个分叉，平衡
+B-TREE：多叉数，平衡，每次都要跑根节点查询
+B+TREE：只放数字，叶子节点含指针，主流通用
