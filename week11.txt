@@ -1,0 +1,1021 @@
+第三十一节课 2018年12月3日  周一
+--------------------------------------------------------------------------I
+--管理索引
+explain 分析索引的有效性，复合索引，先用前字段做排序，所以只能用左边字段做索引，若匹配到多项记录，无法利用索引
+query_cache_size=10M 导入配置文件
+>create index idx_name on test(name(10))
+创建idx_name索引到test,使用name字段的前10个
+>show indexes from testlog\G 查看此表的索引信息
+>select * from test log where id=9999 ; 指定索引第几行
+>show variables like 'query_cache%'; 查看缓存相关变量
+>explain select * from testlog where id=1999; 分析索引使用情况
+>explain select * from students where name='X%' and age=30;也行
+>drop index idx_name on testlog; 删除inx_name索引
+
+查看索引的使用情况
+SET GLOBAL userstat=1; 更改变量（可加入配置文件）
+>show variables like 'userstat'; 查看变量
+>show index_statistics; 查看索引使用情况
+>create unique index uni_name on students(name); 
+创建唯一键索引，引用的字段数据不能有重复
+
+
+--并发控制
+锁粒度：表级锁，行级锁 
+锁：读锁 共享，只读不可写，多个读互不阻塞，只适合myisam
+       写锁 独占锁，排它锁，一个写锁会阻塞其它读和它锁
+实现
+存储引擎：自行实现其锁策略和锁粒度
+服务器级：实现了锁，表级锁；用户可显式请求
+分类（隐士锁:有存储引擎自动施加锁，显示锁：手动）
+
+>lock tables students read;  加读锁
+>lock tables students write;  加写锁，独占锁，仅自己可读可看
+>update students set classid=1 where stuid=20; 加锁会无法修改
+>unlock tables； 是用该命令或退出会话也会解锁
+>flush tables with read lock 所有数据库加读锁,也不能创建用户/表
+>flush tables xx(可加表) with read lock 
+关闭正在打开的表（清除查询缓存），通常在备份前加全局读锁
+>grant all on hellodb.* to test@'%' identified by 'centos' ；加用户
+
+--事务（一组原子性的SQL语句，或一个独立工作单元）
+myisam 没事务日志
+事务日志：记录事务信息，实现undo,redo等故障恢复功能
+ACID特性：
+A：atomicity原子性；整个事务中的所有操作要么全部成功执行，要么全部失败后回滚
+C：consistency一致性；数据库总是从一个一致性状态转换为另一个一致性状态
+I：Isolation隔离性；一个事务所做出的操作在提交之前，是不能为其它事务所见；隔离有多种隔离级别，实现并发
+D：durability持久性；一旦事务提交，其所做的修改会永久保存于数据库中
+异常挂关闭的事务(未执行完)，重启服务后回滚撤销---日志
+已完成的事务 redo  异常关闭；重复执行
+未完成的事务 undo  异常关闭；回滚撤销
+
+启动事务：（可不用配置autocommit）批量提交速度更快
+BEGIN
+BEGIN WORK
+START TRANSACTION
+结束事务：
+COMMIT：提交
+ROLLBACK: 回滚撤销
+(只有事务型存储引擎中的DML语句方能支持此类操作)
+自动提交：set autocommit={1|0} 默认为1，为0时设为非自动提交
+（mysql默认1条命令为一个事务）
+事务支持保存点：savepoint  执行多个命令，只撤销一部分
+SAVEPOINT identifier
+ROLLBACK [WORK] TO [SAVEPOINT] identifier
+RELEASE SAVEPOINT identifier
+例：
+>begin
+>insert students (name) values (a);
+>savepoint sp_a;
+>insert students (name) values (b);
+>savepoint sp_b;
+>insert students (name) values (c);
+>rollback to so_b 只撤销到b的保存点，a和b记录还在
+>release savepoint sp_a; 释放保存点
+
+select @@autocommit; 查看该变量
+autocommit=0  可写入配置文件
+>show processlisk\G 查看进程列表
+>kill 4(ID);   删除ID为4的编号，可实现解锁
+>select @@autocommit;  
+>commit; 提交，前提是autocommit已修改或加begin情况下使用
+>rollback;  回滚撤销
+
+>truncate table coc ; 清空表
+>drop table scores; 删除表
+（以上两条命令需要创建表结构才能撤销还原）▲
+
+事务隔离级别：从上至下更加严格
+READ UNCOMMITTED 可读取到未提交数据，产生脏读
+READ COMMITTED 可读取到提交数据，但未提交数据不可读，产生不可重复读，即可读取到多个提交数据，导致每次读取数据不一致
+REPEATABLE READ 可重复读，多次读取数据都一致，产生幻读，即读取过程中，即使有其它提交的事务修改数据，仍只能读取到未修改前的旧数据。退出会话或执行commit;，可看到更新后的事务，此为MySQL默认设置▲
+SERIALIZABILE 可串行化，未提交的读事务阻塞修改事务，或者未提交的修改事务阻塞读事务。导致并发性能差 
+MVCC: 多版本并发控制，和事务级别相关(只对中间2项隔离级别有效)
+发生死锁，只保留执行时间长的事务（根据时间维度判断）
+
+SET tx_isolation=
+配置文件【transaction_isolation=...】
+READ-UNCOMMITTED  可未提交数据
+READ-COMMITTED  可读提交数据
+REPEATABLE-READ   可重复读
+SERIALIZABLE    可串行化
+
+show variables like 'tx_isolation';查看隔离级别
+vim /etc/my.cnf f 设置隔离级别 (变量选项不同名▲)
+transaction_isolation=read-uncommitted 修改成可读未提交数据
+
+--并发控制
+死锁：
+两个或多个事务在同一资源相互占用，并请求锁定对方占用的资源的状态
+事务日志：
+额外的IO，顺序操作，性能会受影响
+事务日志文件： ib_logfile0， ib_logfile1 （写满轮流覆盖）
+可增加事务日志及大小，等系统空闲时间，再从事务日志写入数据库
+
+
+--通用日志（排除故障，性能优化，一般不启用）
+>show variables like '%innodb_log%'; 显示事务日志相关配置
+innodb_log_file_size=5242880 每个日志文件大小
+innodb_log_files_in_group=2 日志组成员个数
+innodb_log_group_home_dir=/./  事务文件路径
+innodb_flush_log_at_trx_commit 默认为1 (性能相关)
+设置为1，同时sync_binlog = 1表示最高级别的容错
+1事务提交一次写一次
+0每秒写缓存，执行一次（秒为单位）
+2每次事务提交写缓存，但每秒都会进行一次刷新（事务单位）
+3模拟MariaDB 5.5组提交（每组提交3个同步），此项MariaDB 10.0支持
+
+--错误日志（只读）
+启动和关闭过程输出的事件信息，运行中产生的错误信息
+event scheduler运行一个event时产生的日志信息（事件调度器）
+从服务器启动时产生的信息
+日志相关配置：
+show global variables like 'log_error'
+错误文件路径
+log_error=/PATH/TO/LOG_ERROR_FILE
+是否记录警告信息至错误日志文件
+log_warnings=1|0 默认值1
+
+--通用日志(默认不启用，有性能负担，排除/性能优化时可用到)
+tail -f  /var/log/mariabd/mariadb.log 查看日志文件路径
+>show global  variables like 'general_log'\G 显示通用日志信息
+>set general_log=ON  启用通用日志,生成centos7.log文件
+>set global log_output=table;  将日志添加到mysq库里的表
+(↑默认日志会放入文件)
+>use mysql  ↓↓↓
+>select * from general_log 查看日志表
+>select count(argument) from genneral_log;  
+在genneral_log表里统计argument数量
+>select argument,count(*) from general_log group by argument;
+在genneral_log表里统计argument数量，每个命令重复多少次▲
+可分析当前数据库哪些命令用的多，那个字段使用较频繁
+
+--慢查询日志（记录查询时长超出指定时长的操作，默认OFF）
+slow_query_log=ON|OFF 开启或关闭慢查询
+long_query_time=3  慢条件阈值，超过3秒记录到日志，建议开启▲
+slow_query_log   配置慢查询到配置文件
+会生成centos7-slow.log日志文件
+
+>select @@long_query_time 查看变量值
+>select sleep(1) from teachers;  查每条记录睡1秒
+log_queries_not_using_indexes=ON 不使用索引或使用全表扫描，不论是否达到慢查询阀值的语句是否记录日志，默认OFF，即不记录，建议开启▲
+log_slow_rate_limit = 1 多少次查询才记录，mariadb特有
+>show index from students\G  查看索引
+>drop index idx_age_name on students; 删除多余索引
+>create index idx_age on students(age);  添加索引
+
+慢查询分析：
+>select @@profiling; 查看变量，默认不启用0
+>set profiling=ON;  启用(会话级)  建议启用▲
+>show profiles; 查看profiling功能启用期间执行的命令列表及编号
+>show profile for query 5;  查看当前项(编号)的详细说明
+（列出每一步执行所花费的时间，可用来分析）
+
+--二进制日志▲重点 （用于恢复数据，也称为归档日志，默认不启用）
+后于事务日志，记录已提交过的日志（增删改操作）
+不依赖于存储引擎类型
+功能：通过“重放”日志文件中的事件来生成数据副本
+注意：建议二进制日志和数据文件分开存放
+中继日志：relay log
+主从复制架构中，从服务器用于保存从主服务器的二进制日志中读取的事件
+
+二进制日志记录三种格式：binlog_format▲ 
+基于“语句”记录：statement，记录语句，默认模式
+基于“行”记录：row，记录数据，日志量较大，推荐使用▲
+混合模式：mixed, 让系统自行判定该基于哪种方式进行
+>show variables like 'binlog_fromat';  显示日志格式
+(5.5默认是基于语句记录，10.2.19 默认mixed混合模式)
+
+二进制文件的构成：
+有两类文件
+日志文件：mysql|mariadb-bin.文件名后缀，二进制格式
+如： mariadb-bin.000001 达到一定大小自动生成新文件(离线归档日志)
+索引文件：mysql|mariadb-bin.index，文本格式
+
+sql_log_bin=ON|OFF：是否记录二进制日志，默认ON
+set sql_log_bin=OFF：临时禁用二进制日志，会话级，可直接生效
+log_bin=/PATH ：指定日志路径，默认OFF
+select @@sql_log_bin  +  select @@log_bin  都启用才记录二进制日志
+
+vim /etc/my.cnf    写入配置文件
+（建议单独建立二进制目录+并修改mysql所有者权限）
+[mysqld]
+log_bin=/data/logbin/mysql 二进制日志指定路径(mysql是指定前缀)
+sql_log_bin(系统默认ON，所以不用添加)
+>select @@binlog_fromat; 查看日志格式
+>select @@max_binlog_size; 日志最大存储值，处默认1G
+sync_binlog=1|0：设定是否启动二进制日志即时同步磁盘功能，默认0，由操作系统负责同步日志到磁盘
+expire_logs_days=N：二进制日志可以自动删除的天数。 默认为0，即不自动删除
+
+二进制日志相关配置：
+SHOW {BINARY | MASTER} LOGS：
+查看mariadb自行管理使用中的二进制日志文件列表，及大小
+SHOW MASTER STATUS：查看使用中的二进制日志文件
+show binlog events 查看所有日志
+show binlog events in 'mysql-bin.000001' from 656 limit 2,3;
+查看二进制文件中的指定内容，跳过2个看第3个
+flush logs;  生成新的日志文件
+
+二进制日志的客户端命令工具mysqlbinlog
+命令格式：
+mysqlbinlog [OPTIONS] log_file…
+--start-position=# 指定开始位置
+--stop-position=#
+--start-datetime=
+--stop-datetime=
+mysqlbinlog  /data/logbin/mysql-bin.0000003 --verbose(-v)
+--start-position=510 --stop-position=824;
+查看指定的日志文件，从510到824之间位置之间
+
+mysqlbinlog  /data/logbin/mysql-bin.0000003 -v  
+--start-datetime='2018-12-04 00:10:35'
+--stop-datetime=(如忽略该条则往后全都包括)
+查看指定的值日文件，从某个时间点开始，一直到最后时间点
+
+实验：teachers表删除并恢复
+>flush logs
+>delete from teachers;
+>select * from teschers;
+mysqlbinlog  /data/logbin/mysql-bin.0000005 -v > /root/binlog.sql
+导出日志文件，并查看，然后注释#delete from teachers该命令
+>set sql_bin_log=off; 禁用二进制日志记录
+mysql hellodb </root/binlog/sql  导入二进制日志文件
+>select * from teachers; 验证
+>set sql_log_bin=on; 启用二进制日志
+（truncate删除，需要先还原表结构才能恢复）▲
+
+清除指定二进制日志：
+purge binary logs to 'mysql-bin.000004' 
+清除此二进制日志前面的日志，包括索引文件，↑前面的01-03已清除
+
+例：
+PURGE BINARY LOGS TO ‘mariadb-bin.000003’;删除3之前的日志
+PURGE BINARY LOGS BEFORE '2017-01-23'; 删除1.23之前的日志
+PURGE BINARY LOGS BEFORE '2017-03-22 09:25:30'; 精确到秒↑同上
+
+reset master 删除所有日志文件，包括索引
+reset master # 指定从几开始记录二进制文件，默认1
+(mariaDB 10.1.6以后开始支持) 
+flush logs; 切换新的日志文件
+------------------------------
+建议必须设置的▲
+log_bin=/PATH  指定文件路径（和数据库不同目录）
+binlog_format=row 指定二进制日志格式
+max_binlog_size=10G..  单个二进制日志大小
+sync_binlog=1|0  
+0：每秒写入缓存，同步磁盘
+1：每次事务完毕写入缓存，同步磁盘
+exprire_logs_days=N 二进制日志自动删除天数，默认0，不删除
+innodb_file_per_table  数据表单独存放（5.5老版本）
+character-set-server=utf8mb4 服务端字符集配置
+default-character-set=utf8mb4  客户端字符集配置
+query_cache_size=10M 查询缓存
+datadir=/var/lib/mysql   数据库路径
+-------------------------------
+
+--备份和恢复
+需要备份的内容：
+文件数据库
+mysql 数据库：包含用户账号，权限分配信息
+my.cnf 配置文件
+
+--备份类型：
+1）完全备份：整个数据集
+2）部分备份：只备份数据子集，如部分库或表
+
+--增量备份、差异备份
+增量备份：仅备份最近一次完全备份或增量备份（如果存在增量）以来变化的数据，备份较快，还原复杂
+差异备份：仅备份最近一次完全备份以来变化的数据，备份较慢，还原简单
+
+--冷、温、热备份
+冷备：读写操作均不可进行 (复制文件，添加二进制日志路径，改权限)
+温备：读操作可执行；但写操作不可执行
+热备：读写操作均可执行
+MyISAM：温备，不支持热备
+InnoDB：都支持
+
+--物理和逻辑备份
+物理备份：直接复制数据文件进行备份，与存储引擎有关，占用较多的空间，速度快
+逻辑备份：从数据库中“导出”数据另存而进行的备份，与存储引擎无关，占用空间少，速度慢，可能丢失精度
+
+--备份工具
+cp, tar等复制归档工具：物理备份工具，适用所有存储引擎；只支持冷备；完全和部分备份
+LVM的快照：先加锁，做快照后解锁，几乎热备；借助文件系统工具进行备份
+mysqldump：逻辑备份工具，适用所有存储引擎，温备；支持完全或部分备份；对InnoDB存储引擎支持热备，结合binlog的增量备份
+xtrabackup：由Percona提供支持对InnoDB做热备(物理备份)的工具，支持完全备份、增量备份
+MariaDB Backup： 从MariaDB 10.1.26开始集成，基于Percona XtraBackup 2.3.8实现
+mysqlbackup：热备份， MySQL Enterprise Edition组件
+mysqlhotcopy：PERL 语言实现，几乎冷备，仅适用于MyISAM存储引擎，使用LOCK TABLES、FLUSH TABLES和cp或scp来快速备份数据库
+
+--基于LVM的备份▲
+fdisk /dev/sda
+#t;6;8e;p;w
+partprobe
+pvcreate sda6
+vgcreate vg0 /dev/sda6
+lvcreate -n mysql -L 1G vg0
+lvcreate -n binlog -L 1G vg0
+mkdir /data/{mysql,binlog}
+systemctl stop mariadb
+mkfs.xfs /dev/vg0/mysql
+mkfs.xfs /dev/vg0/binlog
+blkid
+mount /dev/vg0/mysql /data/mysql
+mount /dev/vg0/binlog /data/binlog
+vim /etc/my.cnf 修改后
+#log_bin=/data/binlog/mysql-bin ;
+#datadir=/data/mysql
+#socket=/data/mysql/mysql.sock
+cp -av /var/lib/mysql/*  /data/mysql/
+chown -R  mysql.mysql  /data/mysql/   /data/binlog/
+vim /etc/my.cnf.d/mysql-clients.cnf
+#socket=/data/mysql/mysql.sock
+最后重启服务，登录成功，表示前期数据库准备工作已完成
+>flush tables with read lock;  加读锁
+>show binary logs; ll /data/binlog/  查看二进制日志及文件位置454
+(↓在别的终端执行以下命令，否则会解锁只读属性)
+lvcreate -n mysql_snapshot -L 200M -s -p r /dev/vg0/mysql
+给/dev/vg0/mysql数据库创建快照，并设置大小和只读属性
+>unlock tables; 解锁让数据库正常读写
+>insert students (name) values('f') value('g');
+>show binary logs; 查看二进制记录位置变化 
+>mount -o nouuid,norecovery /dev/vg0/mysql_snapshot /mnt 
+临时挂载快照（数据库数据）至/mnt
+tar -cvf  /root/mysql.tar  /mnt/
+umount /mnt
+lvremove /dev/vg0/mysql_snapshot  移除快照
+rm  -rf /data/mysql/*   ； systemctl stop mariadb删库，然后停止服务
+tar xvf mysql.tar -C /mnt  解开数据库文件
+mv /mnt*  /data/mysql/  
+>set sql_log_bin=off; 临时禁用二进制日志
+mysqlbinlog --start-postion=mysql-bin.000001 > incr.sql
+mysqlbinlog --start-postion=mysql-bin.000002 >>incr.sql
+mysqlbinlog --start-postion=mysql-bin.000003 >>incr.sql
+...
+>source /data/binlog/incr.sql  导入增量二进制文件
+>select * from students;  查看文件是否完整
+>set sql_log_bin=on 启用二进制日志
+删除顺序
+lvremove /dev/vg0/binlog  逻辑卷
+lvremove /dev/vg0/mysql  
+vgremove vg0   卷组
+pvremove /dev/sda6     物理组
+fdisk /dev/sda6  ; p;d;6;w   分区删除
+
+操作日志：/.mysql_history
+mariadb日志：/var/log/mariadb/mariadb.log
+系统日志：/var/log/messages 
+--------------------------------------------------------------------------I
+第三十二节课 2018年12月5日  周二
+--------------------------------------------------------------------------I
+逻辑备份工具：mysqldump, mydumper, phpMyAdmin
+基于mysql协议的链接，执行查询，把相应数据返回，重定向到新文件
+mysqldump --help --default-prints 查看默认属性
+mysqldump常见选项：
+-A，--all-databases 备份所有数据库，含create database
+-B , --databases db_name… 指定备份的数据库，包括create database语句
+-E, --events：备份相关的所有event scheduler(计划任务)
+-R, --routines：备份所有存储过程和自定义函数
+--triggers：备份表相关触发器，默认启用,用--skip-triggers，不备份触发器
+--default-character-set=utf8 指定字符集
+--master-data[=#]： 此选项须启用二进制日志
+1：所备份的数据之前加一条记录为CHANGE MASTER TO语句，非注释，不指定#，默认为1 (该命令用于实现主从复制)
+2：记录为注释的CHANGE MASTER TO语句 (会记录备份时间点)
+此选项会自动关闭--lock-tables功能，自动打开-x | --lock-all-tables功能（除非开启--single-transaction）
+
+-F, --flush-logs ：备份前滚动日志，锁定表完成后，执行flush logs命令,生成新的二进制日志文件，配合-A 或 -B 选项时，会导致刷新多次数据库。建议在同一时刻执行转储和日志刷新，可通过和--single-transaction或-x，--master-data 一起使用实现，此时只刷新一次日志
+--compact 去掉注释，适合调试，生产不使用
+-d, --no-data 只备份表结构
+-t, --no-create-info 只备份数据,不备份create table
+-n,--no-create-db 不备份create database，可被-A或-B覆盖
+--flush-privileges 备份mysql或相关时需要使用
+-f, --force 忽略SQL错误，继续执行
+--hex-blob 使用十六进制符号转储二进制列，当有包括BINARY， VARBINARY，BLOB，BIT的数据类型的列时使用，避免乱码
+-q, --quick 不缓存查询，直接输出，加快备份速度
+
+例 :
+mysqldump hellodb > hello_bak.sql (默认-e)  数据库备份
+mysql -e 'create database hello' 
+mysql  < hello_bak.sql 导入指定数据库（还是原来的DB名称）
+
+mysqldump hello students >students.sql 表备份
+msql -e 'create tables students'; 
+mysql lh < lh123.bak.sql  导入表结构到lh数据库(表删除也可以导入)
+（缺点：数据库还需手工创建，才能导入，库结构容易错配）
+----------------------------------------↑不建议使用
+mysql dump -B hello > hello_bak_B.sql 备份数据库及结构
+mysql -e 'drop database hello'   删库
+mysql < hello_bak.B.sql  还原数据库及结构
+
+mysqldump -B hello | gzip >hello.sql.gz  备份再压缩
+或 mysqldump -B hello | xz >hello.sql.xz 
+mysql -e 'drop database hello'  删库
+xz -d hello_bak.sql.xz 解压缩
+mysql < hello_bak.sql.xz  导入恢复
+>show tables; 验证
+------------------------------------------
+mysqldump -A > all_bak.sql   备份所有数据库
+rm -rf /var/lib/mysql/*  删库并重启服务
+mysql  < all_bak.sql  导入恢复
+show procedure status\G;  查看存储过程
+
+mysqldump --master-data=1 -A > all_bak4.sql  
+备份所有数据库外加记录时间点245
+mysqldump --master-data=2 -A > all_bak4.sql  主从复制+2
+
+mysqldump -A -F > all_bak.sql  备份并分离旧的日志文件，键新的
+mysqldump --master-data=2 -A -F compact > all_bak.sql
+去掉注释备份所有数据库
+mysqldump --master-data=2 -A -d >all_bak.sql 
+只备份表结构
+mysqldump --master-data=2 -A -t >all_bak.sql  
+只备份数据，可以实现备份后先修改表结构，然后再导入数据
+
+--分库备份（hello，hellodb，mysql）面试题
+for db in `mysql -e 'show databases' | grep -Ev '^(Database|information_schema|performance_schema)$' `;do mysqldump -B $db|gzip > $db`date +%F` .sql.gz;done
+或
+mysql -e 'show databases' | grep -Ev '^(Database|information_schema|performance_schema)$' |sed -r 's/(.*)/mysqldump -B \1 |gzip > \/data\/1.sql.gz\/' | bash
+
+--分库导入(删除后)
+mysql -e 'drop database hellodb'
+gunzip hellodb.sql.gz
+mysql < hellodb.sql
+mysql -e 'show database'; 查看并验证
+
+MyISAM备份选项：
+支持支持温备；不支持热备，所以必须先锁定要备份的库，而后启动备份
+-x,--lock-all-tables：加全局读锁，锁定所有库的所有表，同时加--single-transaction或--lock-tables选项会关闭此选项功能
+注意：数据量大时，可能会导致长时间无法并发访问数据库
+
+-l,--lock-tables：对于需要备份的每个数据库，在启动备份之前分别锁定其所有表，默认为on,--skip-lock-tables选项可禁用,对备份MyISAM的多个库,可能会造成数据不一致(不推荐使用，会造成每个数据库备份时间不一致，跨表互相协作会产生问题)
+注：以上选项对InnoDB表一样生效，实现温备，但不推荐使用
+
+InnoDB备份选项： 支持热备，可用温备但不建议用
+--single-transaction（以事务方式存放）
+此选项Innodb中推荐使用，不适用MyISAM，此选项会开始备份前，先执行START TRANSACTION指令开启事务
+此选项和--lock-tables（此选项隐含提交挂起的事务）选项是相互排斥
+备份大型表时，建议将--single-transaction选项和--quick结合一起使用
+DML：表数据的增删改
+DCL：数据库/表的增删
+
+InnoDB建议备份策略
+mysqldump –uroot –A –F  --single-transaction --master-data=2 --flush-privileges  --default-character-set=utf8 --hex-blob > /PATH
+MyISAM建议备份策略
+mysqldump –uroot –A –F  –x --master-data=2 --flush-privileges --triggers --default-character-set=utf8 --hex-blob >/PATH
+utf8mb4
+show create database hello 查看数据库字符集
+show table status from hello\G;  查看存储引擎和表的字符集
+show variables like 'character%'; 查看字符集相关变量
+
+实验：删除数据库还原至最新状态▲
+mysqldump -A --single-transaction -F --master-data=2 |gzip
+>/data/all_bak_`date +%F`.sql.gz   备份
+rm -rf /varlib/mysql/*  删库(二进制文件需分开存放)
+iptables -A INPUT -s 192.168.34.0/24 -j REJECT  拒接用户访问
+systemctl restart mariadb 生成初始数据库	
+gzip -d all_bak_2018-12-05.sql.gz 解压备份数据库
+>set sql_log_bin=off 关闭二进制日志
+>show variables like 'sql_log_bin'; 显示二进制是否关闭状态
+>source /data/all_bak_2018-12-05.sql 导入备份数据库
+cat all_bak_2018-12-05.sql 查看备份位置
+mysqlbinlog  /data/logbin/mysql-bin.0000{07,08,09,10} > incr.sql
+导出二进制日志
+>source /data/incr.sql 导入二进制文件
+>select * rom teachers; 查看并验证数据
+>set sql_log-bin=on 开启二进制日志并且恢复iptables限制
+
+
+--还原误删除的表
+>mysqldump -A -F --master-date=2 --single-gransaction > all_bak.sql 
+>select * from teachers;
+>insert teachers(name) values('111');
+>insert teachers(name) values('222');
+>drop table teachers;
+iptables -A INPUT -s 192.168.34.0/24 -j REJECT  拒接用户访问
+>set sql_log_bin=off  关闭二进制日志
+>source /data/all_bak.sql 导入备份
+cat all_bak.sql  分析二进制查看记录位置
+mysqlbinlog mysql-bin.000011 > /data/incr.sql 导出二进制日志
+vim  /data/incr.sql 
+#/DROP TABLE ...  注释掉删除表的命令
+>source /data/incr.sql  导入二进制日志
+>select * from students;  验证
+>set sql_log_bin=on;   开启二进制日志以及允许用户访问
+
+--xtrabackup 备份工具
+特点：
+备份还原过程快速、可靠
+备份过程不会打断正在执行的事务
+能够基于压缩等功能节约磁盘空间和流量
+自动实现备份检验
+开源，免费
+
+yum install percona-xtrabackup 在EPEL源中
+
+xtrabackup 用法：
+备份：innobackupex [option] BACKUP-ROOT-DIR
+选项说明：https://www.percona.com/doc/percona-xtrabackup/LATEST/genindex.html
+--backup （完全备份）
+--user：该选项表示备份账号
+--password：该选项表示备份的密码
+--host：该选项表示备份数据库的地址
+--databases：该选项接受的参数为数据库名，如果要指定多个数据库，彼此间需要以空格隔开；如："xtra_test dba_test"，同时，在指定某数据库时，也可以只指定其中的某张表。如："mydatabase.mytable"。该选项对innodb引擎表无效，还是会备份所有innodb表
+--defaults-file：该选项指定从哪个文件读取MySQL配置，必须放在命令行第一个选项位置
+--incremental：该选项表示创建一个增量备份，需要指定--incremental-basedir
+--incremental-basedir：该选项指定为前一次全备份或增量备份的目录，与--incremental同时使用
+--incremental-dir：该选项表示还原时增量备份的目录
+--include=name：指定表名，格式：databasename.tablename
+
+perpare 准备（--perpare）
+--apply-log ：通过回滚未提交的事务及同步已经提交的事务至数据文件使数据文件处于一致性状态
+--apply-log-only：阻止回滚未完成的事务
+--use-memory：和--apply-log选项一起使用，当prepare 备份时，做crash recovery分配的内存大小，单位字节，也可1MB,1M,1G,1GB等，推荐1G
+--export：表示开启可导出单独的表之后再导入其他Mysql中
+--redo-only：合并增量备份，但不对最后一个增量备份合并
+
+--xtrabackup完全备份及还原▲
+1 在原主机做完全备份到/backups
+xtrabackup --backup --target-dir=/data/backups/  
+完全备份到backups目录,必须先开启mysql服务
+（连接到数据库，加读锁，复制ibd数据库文件）
+scp -r /data/backups/* 目标主机:/data/backups  
+（复制备份数据到目标主机的目录）
+2 在目标主机上
+1）预准备：确保数据一致，提交完成的事务，回滚未完成的事务
+xtrabackup --prepare --target-dir=/data/backups/
+2）复制到数据库目录
+注意：数据库目录必须为空，MySQL服务不能启动
+xtrabackup --copy-back --target-dir=/data/backups/
+3）还原属性
+chown -R mysql:mysql /var/lib/mysql
+4）启动服务(客户端记得加coket文件)
+systemctl start mariadb
+
+--xtrabackup增量备份及还原▲
+1 备份过程
+1）完全备份：xtrabackup --backup --target-dir=/backups/base
+2）第一次修改数据
+3）第一次增量备份
+xtrabackup --backup --target-dir=/backups/inc1 --incremental-basedir=/backups/base
+4）第二次修改数据
+5）第二次增量
+xtrabackup --backup --target-dir=/backups/inc2 --incremental-basedir=/backups/inc1
+6）scp -r /backups/* 目标主机:/backups/
+备份过程生成三个备份目录
+/backups/{base，inc1，inc2}
+2还原过程
+1）预准备完成备份，此选项--apply-log-only 阻止回滚未完成的事务
+xtrabackup --prepare --apply-log-only --target-dir=/backups/base
+2）合并第1次增量备份到完全备份，
+xtrabackup --prepare --apply-log-only --target-dir=/backups/base --incremental-dir=/backups/inc1
+3）合并第2次增量备份到完全备份：最后一次还原不需要加选项--apply-log-only
+xtrabackup --prepare --target-dir=/backups/base --incremental-dir=/backups/inc2
+4）复制到数据库目录，注意数据库目录必须为空，MySQL服务不能启动
+xtrabackup --copy-back --target-dir=/backups/base 合并的备份数据
+5）还原属性：chown -R mysql:mysql /var/lib/mysql
+6）启动服务：systemctl start mariadb
+
+单表恢复不常用，有依赖关系，会导致数据不同步，mariadb 5.5版本不支持单表恢复
+
+
+--mysql复制
+MySQL的扩展:
+   读写分离
+   复制：每个节点都有相同的数据集
+             向外扩展
+             二进制日志
+             单向(主服务器)
+
+复制的功用：
+数据分布/负载均衡读/备份/高可用和故障切换/MySQL升级测试
+主从复制原理：
+主--数据跟新--写入事务日志/binlog日志--发送slave服务线程（dump） 
+从--io thread接收--写入realylog--用sql thread线程--数据跟新
+
+17主服务器配置：
+主节点配置：
+启用二进制日志并添加配置，设置一个全局惟一ID号，重启服务
+（从不服务器可不启用二进制日志）
+[mysqld]
+server-id=1 可不加 
+log_bin=PATH
+创建有复制权限的用户账号
+grant replication slave on *.* to repluser@'192.168.34.%' identified by 'centos'
+授权复制权限给slave，允许任何内容发生变化都可以给repluser用户的主机范围，授权口令centos
+
+27从服务器配置：
+启动中继日志，设置一个全局惟一ID号，设置数据库只读，重启服务 
+[mysqld]
+server_id=# 
+read_only=ON
+----------------↓可不加
+relay_log=relay-log relay log的文件路径，默认值hostname-relay-bin
+relay_log_index=relay-log.index 默认值hostname-relay-bin.index
+使用有复制权限的用户账号连接至主服务器，并启动复制线程
+>CHANGE MASTER TO  
+  >MASTER_HOST='192.168.34.%', 主机
+  >MASTER_USER='repluser',  用户名
+  >MASTER_PASSWORD='centos', 密码
+  >MASTER_PORT=3306, 端口
+  >MASTER_LOG_FILE='mysql-bin.000003', 二进制日志文件名
+  >MASTER_LOG_POS=245, 复制文件
+  >START SLAVE;  开启复制！！
+>show slave status\G 查看从节点状态   
+>show processlist; 查看复制的线程
+#>help change master to ↑有现成范例
+
+新建从服务器并同步数据：
+主：
+mysqldump -A -F --single-transaction --master-data=1 > /data/all_bak.sql  
+完全备份，刷新日志，事务方式存放，记录日志位置和对应的文件名，备份到相应目录
+scp  /data/all_bak.sql 192.168.34.37:/data/   复制备份二进制日志
+
+从：
+yum install mariadb-server -y
+[mysql]  开启服务并且配置
+server-id=3
+read-only  管理员照样可读
+vim /data/all_bak.sql   (复制相应文件到下面↓↓↓)
+#CHANGE MASTER TO
+  >MASTER_HOST='192.168.34.%', 主机    
+  >MASTER_USER='repluser',  用户名
+  >MASTER_PASSWORD='centos', 密码
+  >MASTER_PORT=3306, 端口
+ #MASTER_LOG_FILE='mysql-bin.00005',MASTER_LOG_POS=245; 
+mysql < all_bak.sql  导入备份
+>start slave; 启动复制
+>show slave status\G;  查看状态
+>show databases; 验证数据库
+(后期开机自启实现自动复制,当主断开后,从默认每60秒发起重连请求)▲
+
+替换旧的主，新的从替代主复制：
+从替代主：
+>stop slave;
+>reset slave all;
+>show slave status\G
+vim /etc/my.cnf
+删除read-only，添加log-bin 和 binlog_format=row，并重启服务
+>show master logs; 查看日志位置
+
+其他从：
+>stop slave;
+>reset slave all;
+>CHANGE MASTER TO
+  >MASTER_HOST='192.168.34.17', 主机    
+  >MASTER_USER='repluser',  用户名
+  >MASTER_PASSWORD='centos', 密码
+  >MASTER_PORT=3306, 端口
+>MASTER_LOG_FILE='mysql-bin.00001',MASTER_LOG_POS=245;
+>start slaeve;
+>show slave status\G 验证
+------------------------------------------
+
+cat master.info ：复制主服务器要用的账户和配置信息
+cat relay-log.info ：日志位置和文件编号的对应关系
+
+>stop slave; 停止线程 
+>show slave status\G  查看slave状态
+>show processlist; 查看复制线程
+>reset slave;  清除master.infor ,relay-log.info等同步信息,开始新的relay log , 需要先stop slave
+>reset slave all; 清除所有从服务器设置的主服务配置信息,先stop slave
+#建议从服务器随后把配置文件删除，然后启用log-bin二进制日志
+
+
+
+实验：
+1）xtranbackup 备份
+2）主从复制；替换旧的主，新的从替代主复制
+3）一个主，两个从，主down机，启用新主
+
+--------------------------------------------------------------------------I
+第三十三节课 2018年12月6日  周三
+--------------------------------------------------------------------------I
+如果要启用级联复制,需要在从服务器启用以下配置
+[mysqld]
+log_bin=PATH  配合下面选项↓
+log_slave_updates  从主节点复制二进制日志
+
+-- 级联复制▲
+主17   级联：27    从：37   
+log_slave_updates   启用从服务器记录二进制日志
+17：删除数据库重启服务
+reset master; 清除所有二进制日志
+>grant replication slave on *.* to rpl@'192.168,34,%' identfied by 'centos';  创建账号
+vim /etc/my.cnf
+server-id=1
+log-bin=/data/lobin/mysql-bin
+binlog_format=row
+27: 
+ vim /etc/my.cnf 添加配置文件并重启服务
+log_slave_updates ▲
+log-bin
+binlog-fromat=row
+read-only
+server-id=1
+>change master to
+>master_host='192.168.34.17',
+>master_user='rpl',
+>master_password='centos',
+>master_port=3306,
+>master_log_file='mysql-bin.000001',
+>master_log_pos=245, 
+>start slave;
+>show slave status\G 查看状态 
+>show databases; 查看是否同步
+17：
+mysql < hellodb
+37：
+vim /etc/my.cnf 添加配置文件并重启服务
+	
+read-only
+>change master to
+>master_host='192.168.34.27',
+>master_user='rpl',
+>master_password='centos',
+>master_port=3306,
+>master_log_file='mariadb-bin.000001',
+>master_log_pos=245
+>start slave;
+>show status slave\G
+
+复制架构应该注意的问题：
+1）
+从服务器上设置read_only=ON
+阻止所有用户, 包括主服务器复制的更新 ↓
+mysql> flush tables with read lock;  加读锁 
+2）
+reset slave 清除设置的主服务器同步信息，先stop slave
+reset slave all 清除所有从服务器设置的主服务配置信息，先stop slave
+3）
+sql_slave_skip_counter = N 从服务器忽略几个主服务器的复制事件，
+（stop slave；停止在开启slave，然后重启修改）
+4）
+如何保证主从复制的事务安全
+参看https://mariadb.com/kb/en/library/server-system-variables/
+在master节点启用参数：
+sync_binlog=1 每次写后立即同步二进制日志到磁盘，性能差
+如果用到的为InnoDB存储引擎：
+innodb_flush_log_at_trx_commit=1 每次事务提交立即同步日志写磁盘
+innodb_support_xa=ON 默认值，分布式事务MariaDB10.3.0废除
+sync_master_info=#    #次事件后master.info同步到磁盘
+在slave节点启用服务器选项：
+skip_slave_start=false    slave：开机自启   true：禁止开机自启
+在slave节点启用参数：
+sync_relay_log=# #次写后同步relay log到磁盘
+sync_relay_log_info=# #次事务后同步relay-log.info到磁盘
+
+grant replication
+--主主复制
+主主复制：互为主从
+容易产生的问题：数据不一致；因此慎用
+考虑要点：自动增长id
+配置一个节点使用奇数id
+auto_increment_offset=1 开始点
+auto_increment_increment=2 增长幅度
+另一个节点使用偶数id
+auto_increment_offset=2
+auto_increment_increment=2
+
+主主复制的配置步骤：
+(1) 各节点使用一个惟一server_id
+(2) 都启动binary log和relay log
+(3) 创建拥有复制权限的用户账号
+(4) 定义自动增长id字段的数值范围各为奇偶
+(5) 均把对方指定为主节点，并启动复制线程
+例：主主复制实验
+17：修改配置并重新启动
+server-id=1
+log-bin=/PATH
+auto_increment_offset=1
+auto_increment_increment=2
+27：修改配置并重新启动
+server-id=2
+log-bin=/PATH
+auto_increment_offset=2
+auto_increment_increment=2
+17：
+>grant replication slave on *.* to rpl@'192.168.34.%' identified by 'centos';
+27：
+>change master to
+...地址指向17
+>start slave;
+cat relay-log.info relay-log.info 查看配置项记录值
+
+主主替换
+17：
+>change master to
+...地址指向27
+>start slave;
+>show start slave\G
+17 :
+>start slave 开启然后加记录验证
+
+--半同步复制
+不确保所有从服务器同步，只要有一个成功就行，如果超时（默认10秒）也会返回成功结果，单独装软件模块实现此功能
+rpm -ql mariadb-server 可查该模块
+/usr/lib64/mysql/plugin/semisync_master.so
+/usr/lib64/mysql/plugin/semisync_slave.so
+
+
+半同步复制实现：▲
+主服务器配置:（配置，删库，重启服务）
+vim /etc/my.cnf
+#server-id=1
+#log-bin 
+#binlog_format=row
+>grant replication slave on *.* to rpl@'192.168.34.%' identified by 'centos';
+------------------↑先实现主从复制
+>show plugins; 查看系统默认插件 （NULL表示系统默认已安装）
+> INSTALL PLUGIN rpl_semi_sync_master SONAME 'semisync_master.so'; 
+安装rpl_semi_sync_master插件，文件名是semisync_master.so
+>SET GLOBAL rpl_semi_sync_master_enabled=1; 
+启用插件（建议保存到配置文件）
+重启服务生效
+>SET GLOBAL rpl_semi_sync_master_timeout = 1000;
+设置超时时长为1s (毫秒为单位) 
+>SHOW GLOBAL VARIABLES LIKE '%semi%'; 查看相关变量和状态值
+>SHOW GLOBAL STATUS LIKE '%semi%‘; 查看状态值
+
+从服务器配置:（配置，删库，重启服务）
+vim /etc/my.cnf
+#server-id=2 
+#read-only
+>change master to
+>master_host='192.168.34.17',
+>master_user='rpl',
+>master_password='centos',
+>master_port=3306,
+>master_log_file='mariadb-bin.000001',
+>master_log_pos=245
+>start slave;
+>show slave status\G 查看状态验证
+------------------↑先实现主从复制
+> INSTALL PLUGIN rpl_semi_sync_slave SONAME 'semisync_slave.so';
+安装插件
+> SET GLOBAL rpl_semi_sync_slave_enabled=1; 
+启用此插件（建议保存到配置文件）
+>show plugins; 查看插件
+>select @@rpl_semi_sync_slave_enabled; 查看状态值
+>show global status like '%semi%'; 查看相关变量和状态值
+>stop slave; 
+>start slave;
+重启服务生效
+
+
+
+--复制过滤器
+让从节点仅复制指定的数据库，或指定数据库的指定表
+两种实现方式：
+(1) 服务器选项：主服务器仅向二进制日志中记录与特定数据库相关的事件
+注意：此项和binlog_format相关
+参看：https://mariadb.com/kb/en/library/mysqld-options/#-binlog-ignore-db
+binlog_do_db = 数据库白名单列表，多个数据库需多行实现
+binlog_ignore_db = 数据库黑名单列表
+问题：基于二进制还原将无法实现；不建议使用
+(2) 从服务器SQL_THREAD在replay中继日志中的事件时，仅读取与特定数据库(特定表)相关的事件并应用于本地
+问题：会造成网络及磁盘IO浪费
+
+从服务器上的复制过滤器相关变量  ▲(2) 推荐使用
+>show variables like 'replicate%'; 显示相关变量
+replicate_do_db= 指定复制库的白名单
+replicate_ignore_db= 指定复制库黑名单
+replicate_do_table= 指定复制表的白名单
+replicate_ignore_table= 指定复制表的黑名单
+replicate_wild_do_table= foo%.bar% 支持通配符
+replicate_wild_ignore_table=
+（如果写白名单，后期没在白名单的默认不复制，配置重启服务生效）
+
+>show master status; 列出最新的二进制日志位置，及数据过滤器的白名单黑名单
+>show master logs; 列出所有二进制日志位置
+建议配置在从服务器上，避免后期恢复二进制日志
+
+
+--MySQL复制加密 (通过ssl加密同步)▲
+主服务器：
+mkdir /etc/my.cnf.d/ssl 建立证书文件夹
+cd /etc/my.cnf.d/ssl
+(umask 066;openssl genrsa 2048 > cakey.pem )生成私钥文件并行执行
+openssl req -new -x509 -key cakey.pem -out cacert.pem -days 3650
+利用cakey私钥文件生成cacert.pemCA自签名证书文件，有效期10年；
+↓ 
+(CN;beijing;beijing;magedu;devops;ca.magedu.com)
+openssl req -newkey rea:2048 -day 365 -nodes -keyout master.key > master.csr
+生成私钥master.key，有效期1年，利用私钥生成证书申请文件   
+（cacert.pem证书 ； master.key私钥 ； master.csr证书申请文件 ）
+
+openssl  req -newkey rsa:2048 -days 365 -nodes -keyout slave.key > slave.csr 
+(CN;beijing;beijing;magedu;d
+↓evops;ca.magedu.com)
+生成私钥slave.key，有效期1年，利用私钥生成slave.csr证书申请文件
+
+openssl x509 -req -in master.csr -CA cacert.pem -CAkey cakey.pem -set_serial 01 > master.crt（证书文件）
+利用CA信息，同时指定证书编号，默认1年，生成master.csr证书
+
+openssl x509 -req -in slave.csr -CA cacert.pem -CAkey cakey.pem -set_serial 02 > slave.crt（证书文件）
+利用CA信息，同时指定证书编号，默认1年，生成slave.csr证书
+
+openssl x509 -in master.crt  -noout --text;查看颁发的证书内容
+openssl verify -CAfile cacert.pem master.crt slave.crt
+验证颁发证书的有效性
+
+vim /etc/my.cnf 添加ssl配置并重启服务
+#log-bin
+#server-id
+#ssl （只要指定ssl路径，可不加也会开启）
+#ssl-ca=/etc/my.cnf.d/ssl/cacert.pem
+#ssl-cert=/etc/my.cnf.d/ssl/master.crt
+#ssl-key=/etc/my.cnf.d/ssl/master.key
+show variables like '%ssl%'; 查看ssl相关变量及是否启用ssl
+>grant replication slave on *.* to rplssl@192.168.34.% identified by 'cenots' require ssl; 
+授权复制权限给从服务器，并创建rplssl账户可复制任何数据，指定此用户必须用ssl加密方式访问
+
+
+从服务器：
+mkdir /etc/my.cnf.d/ssl/
+scp cacert.pem slave.crt slave.key  192.68.34.27:/etc/my.cnf.d/ssl/
+复制证书和私钥文件
+show variables like '%ssl%'; 查看ssl相关变量
+
+mysql -u rplssl -p centos -h 192.168.34.17 
+--ssl-ca=/etc/my.cnf.d/ssl/cacert.pem 
+--ssl-cert=/etc/my.cnf.d/ssl/slave.crt
+--ssl-key=/etc/cmy.cnf.d/ssl/slave.key
+通过证书文件，私钥文件配合CA证书来连接到主数据库
+>status; 可验证是否使用ssl加密连接
+
+>stop slave;
+>reset slave all; 清除连接主服务器的所有配置信息
+>CHANGE MASTER TO
+>MASTER_HOST='MASTERIP',
+>MASTER_USER='rep',
+>MASTER_PASSWORD='centos',
+>MASTER_LOG_FILE='mariadb-bin.000001',
+>MASTER_LOG_POS=245,
+>MASTER_SSL=1,   要求加密
+>MASTER_SSL_CA = '/etc/my.cnf.d/ssl/cacert.pem',
+>MASTER_SSL_CERT = '/etc/my.cnf.d/ssl/slave.crt',
+>MASTER_SSL_KEY = '/etc/my.cnf.d/ssl/slave.key';
+>show slave status\G  查看并验证
+>start slave;
+
+
+--复制的监控和维护
+1）
+>purge master logs to 'mariadb-bin.000007' ; 清理7之前的日志
+>reset master; 二进制日志从000001开始编号
+>reset slave 重新生成配置
+2）复制监控
+show master status    列出最新的二进制日志位置，及数据过滤器的白名单黑名单
+show binlog events   查看二进制日志
+show binary logs      查看二进制记录位置变化 
+show slave status    查看slave状态
+show processlist     查看进程列表
+
+--ProxySQL（5.5.30）
+内置小的数据库，提供配置数据库，增删改就可以管理mysql
+6032 管理端口   
+6033 对外提供服务的端口，用户应用程序访问
+内置账号 admin admin
+>status  
+>show  databases;
+>use main;
+>load ...to runtime  加载到runtime生效
+>save ... to disk 将配置保存到磁盘
+
+
+--MySQL高可用 
+必加项 
+skip-name-resolv 忽略名称解析
+server-id
+read-only
+
+grant replication slave on *.* to reluser@'192/168.34.%'  by 'centos';
+
+实现主从复制和时间同步
+
+
+--galera cluster  高可用集群 5.5.62 mariadb s
+
+yum list MariaDB-Galera-server
+yum install MariaDB-Galera-server -y三台都要装
+vim /etc/my.cnf.d/server.conf
+[galera]
+wsrep_provider = /usr/lib64/galera/libgalera_smm.so
+wsrep_cluster_address="gcomm://192.168.8.7,192.168.8.17,192.168.8.27"  节点都包括谁
+binlog_format=row  基于行的二进制日志
+default_storage_engine=InnoDB  默认存储引擎
+innodb_autoinc_lock_mode=2  
+bind-address=0.0.0.0
+
+scpserver.cnf 192.168.34.17:/etc/my.cnf.d/   复制到其他主机
+scpserver.cnf 192.168.34.77:/etc/my.cnf.d/ 
+rpm -qf /etc/init.d/mysql  查看mysql来源包
+service mysql start --wsrep-new-cluster 启动服务
+service mysql start
+（其他两个主机也启动服务）
+show status like 'wsrep_c%';  查看相关配置状态
+show variables like 'wsrep_c%'; 查看变量
+show variables  like 'max%';  查看并发连接
+
+ulimit -n 10222  程序最大请求接入数量
