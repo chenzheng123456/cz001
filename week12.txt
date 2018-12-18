@@ -1,0 +1,1397 @@
+--------------------------------------------------------------------------I
+第三十四节课 2018年12月11日  周二
+--------------------------------------------------------------------------I
+面试重点：
+HTTP协议版本的区别1.0/1.1/2.0
+HTTP建立连接访问的过程
+两大部分：HTTP请求 HTTP响应
+
+【HTTP和APACHE】
+服务器端：创建socket--绑定协议/本地地址和端口--处于监听状态--接受请求--创建新套接字描述符--
+客户端：创建socket--发送连接请求
+
+套接字相关的系统调用：
+socket(): 创建一个套接字
+bind()： 绑定IP和端口
+listen()： 监听
+accept()： 接收请求
+connect()： 请求连接建立
+write()： 发送
+read()： 接收
+close(): 关闭连接
+
+普通用户不能用1023以内的端口，除非以root身份运行
+
+前端开发三剑客：
+html超文本标记语言，编程语言，一种文件格式
+CSS: Cascading Style Sheet 层叠样式表
+js: javascript
+
+MIME：Multipurpose Internet Mail Extensions
+多用途互联网邮件扩展 /etc/mime.types
+
+
+HTTP协议介绍▲
+http/0.9 ：功能家简陋，只有一个get（下载）命令，服务器只能相应html格式的字符串，不能回应别的格式。
+
+http/1.0 ：每个TCP连接只能发送一个请求，发送数据完毕，连接就关闭，如果还要请求其他资源，就必须再新建一个连接
+#引入了post（上传）命令和head命令
+#头信息是ascii码，后面数据可为任何格式
+
+http/1.1 ：引入了持久连接，tcp默认不关闭，可以被多个请求复用，不用声明Connection: keep-alive。对于同一个域名，大多数浏览器允许同时建立6个持久连接
+引入管道机制，即在同一个TCP连接里，客户端可以同时发送多个请求，进一步改进了HTTP协议的效率
+新增方法：：PUT、PATCH、OPTIONS、DELETE
+同一个TCP连接里，所有的数据通信是按次序进行的。服务器只能顺序处理回应，前面的回应慢，会有许多请求排队，造成"队头堵塞"
+为避免上述问题，两种方法：一是减少请求数，二是同时多开持久连接。网页优化技巧，如合并脚本和样式表、将图片嵌入CSS代码、域名分片（domain sharding）等
+HTTP 协议不带有状态，每次请求都必须附上所有信息。请求的很多字段都是重复的，浪费带宽，影响速度
+
+http/2.0：2015年
+头信息和数据体都是二进制，称为头信息帧和数据帧
+复用TCP连接，在一个连接里，客户端和浏览器都可以同时发送多个请求或回应，且不用按顺序一一对应，避免了“队头堵塞“,此双向的实时通信称为多工（Multiplexing）
+引入头信息压缩机制（header compression）,头信息使用gzip或compress压缩后再发送；客户端和服务器同时维护一张头信息表，所有字段都会存入这个表，生成一个索引号，不发送同样字段，只发送索引号，提高速度
+HTTP/2 允许服务器未经请求，主动向客户端发送资源，即服务器推送（server push）
+
+工作机制：
+http请求：http request
+http响应：http response
+一次http事务：请求<-->响应
+Web资源：web resource
+一个网页由多个资源构成，打开一个页面，会有多个资源展示出来，但是每个资源都要单独请求。因此，一个“Web 页面”通常并不是单个资源，而是一组资源的集合
+静态文件：无需服务端做出额外处理
+文件后缀：.html, .txt, .jpg, .js, .css, .mp3, .avi
+动态文件：服务端执行程序，返回执行的结果（后面配合数据库）
+文件后缀：.php, .jsp ,.asp
+
+提高HTTP连接性能
+并行连接：通过多条TCP连接发起并发的HTTP请求
+持久连接：keep-alive,长连接，重用TCP连接，以消除连接和关闭的时延,  以事务个数和时间来决定是否关闭连接
+管道化连接：通过共享TCP连接发起并发的HTTP请求
+复用的连接：交替传送请求和响应报文（实验阶段）
+
+URI: Uniform Resource Identifier 统一资源标识，分为URL和URN
+URN: Uniform Resource Naming，统一资源命名
+
+网站访问量排名统计：http://www.alexa.cn/rank/
+IP(独立IP)
+PV(访问量)
+UV(独立访客)
+PV,OPS, 并发连接数换算公式
+QPS= PV* 页面衍生连接次数/ 统计时间（86400）
+并发连接数 =QPS * http平均响应时间
+峰值时间：每天80%的访问集中在20%的时间里，这20%时间为峰值时间
+峰值时间每秒请求数(QPS)=( 总PV数 *页?衍?连接次数）*80% ) / ( 每天秒数 * 20% )
+
+一次完整的http请求处理过程▲
+1、建立连接：接收或拒绝连接请求
+2、接收请求：接收客户端请求报文中对某资源的一次请求的过程
+3、处理请求：服务器对请求报文进行解析，并获取请求的资源及请求方法等相关信息，根据方法，资源，首部和可选的主体部分对请求进行处理
+4、访问资源：
+服务器获取请求报文中请求的资源web服务器，即存放了web资源的服务器，负责向请求者提供对方请求的静态资源，或动态运行后生成的资源
+5、构建响应报文：
+一旦Web服务器识别除了资源，就执行请求方法中描述的动作，并返回响应报文。响应报文中 包含有响应状态码、响应首部，如果生成了响应主体的话，还包括响应主体
+6、发送相应相应报文
+7、记录日志
+
+应用程序服务器
+IIS .asp
+tomcat .jsp
+jetty 开源的servlet容器，基于Java的web容器
+Resin CAUCHO公司，支持servlets和jsp的引擎
+webshpere(IBM), weblogic(BEA), jboss,oc4j(Oracle)
+web程序市场占有率统计：www.netcraft.com
+
+MPM工作模式：（http服务运行的工作模型）
+prefork：多进程I/O模型，一个主进程生成/多个子进程，每个子进程响应一个请求，最大不超过1024个进程，默认模型▲
+worker：复用多进程I/O模型，一个主进程生成M个子进程，每个子进程负责生成N个线程，每个线程相应一个请求,IIS使用此模型
+特点：当其中一个线程出现问题，会影响整个子进程中的其他线程，并发性强，消耗资源较少。但是稳定性较差。 
+event：时间驱动模型（worker模型的变种）,有专门的管理线程主动释放keep_alive连接，增强并发请求的处理能力
+（keep_alive ↑长时间没有具体的请求发送回主动释放线程）
+
+--httpd安装
+配置文件：
+/etc/httpd/conf/httpd.conf
+/etc/httpd/conf.d/*.conf
+检查配置语法：
+httpd –t
+查看静态编译的模块
+httpd -l
+查看静态编译及动态装载的模块
+httpd –M
+动态模块加载：不需重启即生效
+动态模块路径
+/usr/lib64/httpd/modules/
+
+--Httpd 常见配置
+prefork的配置：
+StartServers 8  默认开启8个进程
+MinSpareServers 5    最小空闲进程
+MaxSpareServers 20  最大空闲进程
+ServerLimit 256 最多进程数,最大20000（apache 最大10000）
+MaxRequestsPerChild 4000 子进程最多能处理的请求数量。在处理MaxRequestsPerChild 个请求之后,子进程将会被父进程终止，这时候子进程占用的内存就会释放(为0时永远不释放）
+--程序环境
+服务单元文件： /usr/lib/systemd/system/httpd.service
+配置文件：/etc/sysconfig/httpd
+服务控制和启动：
+systemctl enable|disable httpd.service
+systemctl {start|stop|restart|status} httpd.service
+站点网页文档根目录： 
+/var/www/html
+模块文件路径：
+/etc/httpd/modules
+/usr/lib64/httpd/modules
+主程序文件：
+/usr/sbin/httpd
+主进程文件：
+/etc/httpd/run/httpd.pid
+日志文件目录：
+/var/log/httpd/access_log  访问日志
+/var/log/httpd/error_log  错误日志
+帮助文档包：
+httpd-manual
+
+--Httpd prefork配置
+StartServers 8  默认开启8个进程
+MinSpareServers 5    最小空闲进程
+MaxSpareServers 20  最大空闲进程
+ServerLimit 256 最多进程数,最大20000（apache 最大10000）
+MaxRequestsPerChild 4000 子进程最多能处理的请求数量。在处理MaxRequestsPerChild 个请求之后,子进程将会被父进程终止，这时候子进程占用的内存就会释放(为0时永远不释放）
+
+--常见配置▲区分大小写 
+生效顺序：主配文件（按从上到下顺序）>自定义配置文件
+1）显示服务器版本信息
+vim  /etc/httpd/conf/httpd.conf  主配置文件
+或   /etc/httpd/conf.d/test.conf 配置文件
+ServerTokens Prod  隐藏版本号，只显示web服务名称
+（curl -I 192.168.34.17验证头部信息）
+2）修改端口
+Listen 9527  侦听端口
+listen 191.168.34.27:9527 绑定9527端口，使本地IP只能通过27访问服务
+3）持久连接
+设置：KeepAlive On|Off
+KeepAliveTimeout 15（默认秒为单位，可加ms）
+MaxKeepAliveRequests 100
+4）MPM（ Multi-Processing Module）多路处理模块
+【prefork、worker、event】
+MPM模块切换：
+/etc/httpd/conf.modules.d/00-mpm.conf
+选择要加载的模块，去掉#注释重启服务即可
+5）动态模块配置
+/etc/httpd/conf/httpd.conf
+/etc/httpd/conf.modules.d/*
+配置指定实现模块加载格式：
+LoadModule <mod_name> <mod_path>
+模块文件路径可使用相对路径：
+相对于ServerRoot（默认/etc/httpd）
+6）定义'Main' server的文档页面路径
+vim /etc/httpd/conf/httpd.conf 
+#DocumentRoot "/data/www"  更改默认访问路径
+#<Directory "/data/www">
+#    Require all granted
+#</Directory>
+可写到/etc/httpd/conf.d/test.conf目录下，然后把主配置注释掉
+7）定义站点页面
+vim /etc/httpd/conf.d/test.conf
+DirectoryIndex  xxx.html 定义站点页面
+然后注释掉#DirectoryIndex index.html 主配置文件
+/etc/httpd/conf.d/welcome.conf  当没有定义站点时默认的显示页面
+（删除后，会只显示字符‘forbidden’）
+8）站点访问控制常见机制
+访问控制机制有两种：客户端来源地址、用户账户
+文件系统路径：
+<Directory “/path">
+...
+</Directory>
+<File “/path/file”>
+...
+</File>
+<FileMatch "PATTERN">
+...
+</FileMatch>
+URL路径：
+<Location "">
+...
+</Location>
+<LocationMatch "">
+...
+</LocationMatch>
+
+9）<Directory>中“基于源地址”实现访问控制
+@Options：后跟1个或多个以空白字符分隔的选项列表
+在选项前的+，- 表示增加或删除指定选项
+vim test.conf
+<directory /data/www>
+require all granted
+options 
+indexes  允许访问该目录▲
+FollowSymLinks：允许访问符号链接文件所指向的源文件▲
+例：ln -s /etc   etcdir  在www目录下创建etcdir软连接指向/etc
+None：全部禁用
+All： 全部允许
+</directory>
+<directory /data/www/news>
+require all denied  拒绝所有用户访问指定目录
+</directory>
+
+@AllowOverride(允许覆盖)：访问控制相关指令可以放在网站指定目录下的.htaccess（由AccessFileName指定）文件中，覆盖之前的配置指令
+AllowOverride All: .htaccess中所有指令都有效 《在配置文件中加》
+AllowOverride None： .htaccess 文件无效 《默认不允许，可不加》
+AllowOverride AuthConfig Indexes: .htaccess里的账号配置和索引生效
+
+vim .htaccess<网站页面访问的当前目录建立>
+options indexes  FollowSymLinks (允许软连接+索引)覆盖配置文件
+（不需要重启可直接生效）
+
+@基于ip的访问控制
+无明确授权的目录，默认拒绝
+允许所有主机访问：Require all granted
+拒绝所有主机访问：Require all denied
+<RequireAll>
+Require all granted
+Require not ip 172.16.1.1 拒绝特定IP
+</RequireAll>
+<RequireAny>
+Require all denied
+require ip 172.16.1.1 允许特定IP
+</RequireAny>
+（如果有指定目录，需要把<RequireAll>语句嵌入到里面）
+
+10）日志设定
+日志类型：
+访问日志   /var/log/httpd/access_log
+错误日志  /var/log/httpd/error_log
+vim /etc/httpd/conf/httpd.conf ↓ 
+combined(组合)  这行定义存放日志格式
+logFormat  **
+（h远程主机名；l远程登录；u远程用户登录；t时间格式；r请求的第一行
+；s相应状态码；b除去http头部信息访问文件的大小；referer从哪个页面跳转过来的；user-agent客户端的浏览器版本）
+
+11)设定默认字符集
+AddDefaultCharset utf-8  修改字符集（默认）
+curl -I www.qq.com 可验证
+中文字符集：GBK,GB2312,GB180230
+
+12）定义路径别名
+格式：Alias /url/   "/PATH" 
+访问/url/时，会自动定向到/PATH目录
+例：
+alias  /sportsdir  
+<directory /data2/sports>
+require all granted 允许所有用户访问
+</directory>
+子目录，和定义的别名→别名优先
+
+13）基于用户的访问控制
+@定义安全域
+<Directory “/data/www/admin">
+#Options None
+#AllowOverride None
+AuthType Basic  采用sasic验证(明文)
+AuthName "welcome to Login"  验证时弹对话框提示语句
+AuthUserFile "/etc/httpd/conf.d/httpdpass"  加密口令文件
+Require user tom   允许访问的用户
+</Directory>
+setfacl -m u:apache:r /etc/httpd/conf.d/httpdpass 给服务授权
+允许账号文件中的所有用户登录访问：
+Require valid-user
+
+@提供账号和密码存储（文本文件）
+使用专用命令完成此类文件的创建及用户管理
+htpasswd [options] /PATH/HTTPD_PASSWD_FILE username
+-c 自动创建文件，仅应该在文件不存在时使用
+-p 明文密码
+-d CRYPT格式加密，默认
+-m md5格式加密
+-s sha格式加密
+-D 删除指定用户
+例：
+htpasswd -C /etc/httpd/conf.d/httpdpass  tom  
+创建存放账号密码的文件▲（再次创建用户密码，不需要重建文件）
+chmod 600 /etc/httpd/conf.d/httpdpass  添加权限
+
+##基于组账号进行认证
+vim /etc/httpd/conf.d/httpdgroup
+testgroup: tom jerry  (组名)
+授权该组的人可以访问网站页面
+
+vim /var/www/admin/.htaceess    (admin)访问页面目录
+authtype basic
+AuthName "welcome to Login"
+AuthUserFile "/etc/httpd/conf.d/httpdpass"  用户口令文件
+AuthGroupFile "/etc/httpd/conf.d/httpgrou" 组口令文件
+Require group  testgrou  允许testgroup组的用户发访问
+
+远程客户端和用户验证的控制
+Satisfy ALL|Any
+ALL 客户机IP和用户验证都需要通过才可以
+Any客户机IP和用户验证,有一个满足即可
+
+14）实现用户家目录的http共享(并允许指定用户登录)
+基于mode_userdir.so实验；安装httpd默认安装
+vim /etc/httpd/conf.d/userdir.conf
+<IFModule mod_userdir.c>
+#UserDir disabled 注释该行
+  Userdir  public_html  允许特定文件共享
+ </IFModule>
+#<Directroy "/home/wang/public_html">  
+#...注释掉该项
+authtype basic  验证方式
+authname "wang home" 提示
+authuserfile "/etc/httpd/conf.d/httpdpass" 用户口令文件
+require user tom    只允许tom登录
+#</Directroy>
+mkdir  ~/public_html
+echo wanghome_pblic_html > public_html/index.html 创建页面
+setfacl -m u:apache:x /home/wang  给apache+x权限→wang目录
+cd /home/wang/public_html/
+http://192.168.34.7/~wang 访问测试
+
+15）ServerSignature On | Off | EMail  （默认关闭）
+（关闭 因访问页面错误提示的版本信息）
+
+16）status页面（显示apache的工作状态）
+LoadModule status_module modules/mod_status.so
+<Location
+httpd -M | grep status  查看是否加载
+<Location "/status">  
+SetHandler server-status   显示apache当前的工作信息
+</Location>
+192.168.34.7/status 可查看apache当前的工作信息
+↑ 可做循环脚本自动启动服务
+
+17）虚拟主机▲
+站点标识： socket
+IP相同，但端口不同
+IP不同，但端口均为默认端口
+FQDN不同： 请求报文中首部 Host: www.magedu.com
+
+有三种实现方案：
+基于ip：为每个虚拟主机准备至少一个ip地址
+基于port：为每个虚拟主机使用至少一个独立的port
+基于FQDN：为每个虚拟主机使用至少一个FQDN
+
+mkdir /etc/httpd/conf.d/data/{a,b,c}site
+echo www.a.com >asite/index.html  34.7
+echo www.b.net  > bsite/index.html   0.7
+echo www.c.cn    > csite/index.html  34.77
+ip a a 192.168.34.77 dev eth0 添加地址
+vim /etc/httpd/conf.d/test.conf
+
+根据ip地址来区分
+<virtualhost 192.168.34.7:80>
+DcumentRoot "/data/asite"
+<directory /data/asite>
+Require all granted
+<directory>
+</virt ualhost>
+.....其余页面的地址格式依次，但地址不同
+测试：curl 192.168.34.7 【www.a.com】
+
+根据端口号来区分
+listen 81
+listen 82
+listen 83
+<virtualhost *:81>
+DcumentRoot "/data/bsite"
+<directory /data/bsite>
+Require all granted
+<directory>
+</virtualhost>
+...其余页面的地址格式依次，但端口不同
+测试：curl 192.168.34.77:81 【www.b.net】
+
+根据全称域名来访问▲通用型强
+<virtualhost 192.168.34.77:80>
+DcumentRoot "/data/csite"
+servername  "www.c.cn"
+<directory /data/csite>
+Require all granted
+<directory>
+customlog  /var/log/httpd/access_c.log  testlog 可单独存放日志
+</virtualhost>
+...其余页面的地址格式依次，但servername不同
+测试：curl www.c.cn 【www.c.cn】
+vim /etc/host
+192.168.34.7 www.a.com  www.b.net www.c.cn【需要搭DNS服务 】
+
+当指定端口，浏览器输入地址时，会访问默认地址
+但指定servername，浏览器输入IP地址时，默认按配置文件顺序访问
+
+ 
+--------------------------------------------------------------------------I
+第三十五节课 2018年12月13日  周四
+--------------------------------------------------------------------------I
+
+--mod_deflate模块
+适用场景：
+(1) 节约带宽，额外消耗CPU；同时，可能有些较老浏览器不支持
+(2) 压缩适于压缩的资源，例如文本文件
+vim test.conf
+DocumentRoot "/data/asite"
+<directroy /data/asite>
+AddOutputFilterByType DEFLATE text/plain  压缩存文本 
+AddOutputFilterByType DEFLATE text/html  压缩html
+DeflateCompressionLevel 9 压缩比
+</drectroy>
+curl -I --compreesed www.a.com/m.txt  +压缩选项，查看
+
+
+
+
+【https实现】
+服务器端：
+yum install mod_ssl （只支持一个html的网站）
+cd /etc/pki/CA
+(umask 066;openssl genrsa -out private/cakey.pem  2048 )
+生成证书私钥文件
+openssl req -x509 -key private/cakey.pem -out cacert.pem
+<CN,beijing,beijing,magedu,devops,ca,magedu>
+生成自签名证书CA文件
+touch index.txt;  颁发证书的数据库
+echo 01> serial;  颁发证书的序列号
+cd /etc/httpd/conf.d/
+mkdir ssl
+(umask 077;openssl genrsa -out httpd.key 1024)
+生成httpd证书私钥文件
+openssl req -new -key httpd.key out httpd.csr
+<CN,beijing,beijing,magedu,beiguobu,ca,*.magedu.com网站名>
+借助私钥文件生成证书申请文件
+cd /etc/pki/CA
+openssl ca -in /etc/httpd/conf.d/ssl/httpd.csr -out certs/httpd.crt 
+-dyas 100 （有效期/天） 
+利用申请文件，颁发证书
+cp certs/httpd.crt /etc/httpd/conf.d/ssl/  拷贝证书到工作目录
+cp cacert.pem /etc/httpd/conf.d/ssl/ 拷贝CA证书文件到工作目录
+vim /etc/httpd/conf.d/ssl.conf
+SSLCertificateFile /etc/httpd/conf.d/ssl/httpd.crt  修改证书路径
+SSLCertificatekeyFile /etc/httpd/conf.d/ssl/httpd.key 修改私钥路径
+SSLCertificateFile /etc/httpd/conf.d/ssl/cacert.pem 添加CA路径
+重启服务
+vim /etc/hosts
+192.168.34.7 www.magedu.com 设置域名解析
+sz cacert.pem 导出到桌面，并修改成crt后缀，并且安装
+openssl s_lient -connect www.magedu.com:443 -CAfile ~/cacert.pem.crt
+GET /index.html HTTP/1.1
+测试基于https访问相应的主机
+curl  --cacert   cacert.pem.crt  https://www.magedu.com   
+测试访问
+
+--http重定向https
+将http请求转发至https的URL
+重定向
+Redirect [status] URL-path URL
+status状态：
+Permanent： 返回永久重定向状态码 301
+Temp：返回临时重定向状态码302. 此为默认值
+示例：
+Redirect temp / https://www.magedu.com/
+
+vim /etc/httpd/conf/httpd.conf
+Redirect temp / https://192.168.34.7/  把httpd重定向到https
+RewriteEngine on
+RewriteRule ^(/.*)$ https://%{HTTP_HOST}$1 [redirect=302]
+定义跳转规则 [临时跳转]
+访问并测试！！
+
+--HSTS
+HSTS:HTTP Strict Transport Security
+服务器端配置支持HSTS后，会在给浏览器返回的HTTP首部中携带HSTS字段。浏览器获取到该信息后，会将所有HTTP访问请求在内部做307跳转到HTTPS。而无需任何网络过程
+HSTS preload list
+是Chrome浏览器中的HSTS预载入列表，在该列表中的网站，使用Chrome浏览器访问时，会自动转换成HTTPS。Firefox、Safari、Edge浏览器也会采用这个列表
+实现HSTS示例：
+vim /etc/httpd/conf/httpd.conf
+Header always set Strict-Transport-Security "max-age=31536000"
+告知客户端浏览器，去http*自动跳转，有效期1年
+RewriteEngine on
+RewriteRule ^(/.*)$ https://%{HTTP_HOST}$1 [redirect=302]
+定义跳转规则 [临时跳转]
+
+--反向代理功能
+启用反向代理（访问/，转到另外主机页面）
+ProxyPass "/" "http://www.example.com/"
+ProxyPassReverse "/" "http://www.example.com/" 
+特定URL反向代理（访问特定目录，转到另外主机页面）
+ProxyPass "/images" "http://www.example.com/"
+ProxyPassReverse "/images" http://www.example.com/
+示例：
+<VirtualHost *>
+ServerName www.magedu.com
+ProxyPass / http://localhost:8080/
+ProxyPassReverse / http://localhost:8080/
+</VirtualHost>
+
+--sendfile机制
+在kernel 2.0+ 版本中，系统调用 sendfile() 就是用来简化上面步骤提升性能的。sendfile() 不但能减少切换次数而且还能减少拷贝次数
+用 sendfile() 来进行网络传输的过程：
+sendfile(socket, file, len);
+硬盘 >> kernel buffer (快速拷贝到kernel socket buffer) >> 协议栈
+
+
+
+解决http协议无状态方法
+cookie 客户端存放
+session 服务端存放
+
+http相应保温结构：开始行（状态行）--首部行--实体
+开始行：版本-状态码-短语-<回车换行>
+
+http协议状态码分类
+status(状态码)：
+1xx：100-101 信息提示
+2xx：200-206 成功
+3xx：300-305 重定向
+4xx：400-415 错误类信息，客户端错误
+5xx：500-505 错误类信息，服务器端错误
+
+200： 成功，请求数据通过响应报文的entity-body部分发送;OK
+301： 永久重定向
+302： 临时重定向
+304： 表示从本地缓存得到的页面
+401： 需要输入账号和密码认证方能访问资源；Unauthorized
+403： 请求被禁止；Forbidden
+404： 服务器无法找到客户端请求的资源；Not Found
+500： 服务器内部错误；Internal Server Error
+502： 代理服务器从后端服务器收到了一条伪响应，如无法连接到网关；Bad Gateway
+503： 服务不可用，临时服务器维护或过载，服务器无法处理请求
+504： 网关超时
+
+
+cookie
+针对需求做研发才有，大部分网站需要保留用户信息，基本都有cookie，
+一个cookie最大4096
+
+--curl工具
+-A/--user-agent <string> 设置用户代理发送给服务器
+-e/--referer <URL> 来源网址
+--cacert <file> CA证书 (SSL)
+-k/--insecure 允许忽略证书进行 SSL 连接
+
+
+--compressed 要求返回是压缩的格式
+-H/--header <file> 自定义首部信息传递给服务器
+-i 显示页面内容，包括报文首部信息
+-I/--head 只显示响应报文首部信息
+-D/--dump-header <file>将url的header信息存放在指定文件中
+--basic 使用HTTP基本认证
+-u/--user <user[:password]>设置服务器的用户和密码
+-L 如果有3xx响应码，重新发请求到新位置
+-O 使用URL中默认的文件名保存文件到本地
+-o <file> 将网络文件保存为指定的文件中
+--limit-rate <rate> 设置传输速度
+-0/--http1.0 数字0，使用HTTP 1.0
+-v/--verbose 更详细
+-C 选项可对文件使用断点续传功能
+-c/--cookie-jar <file name> 将url中cookie存放在指定文件中
+-x/--proxy <proxyhost[:port]> 指定代理服务器地址
+-X/--request <command> 向服务器发送指定请求方法
+-U/--proxy-user <user:password> 代理服务器用户和密码
+-T 选项可将指定的本地文件上传到FTP服务器上
+--data/-d 方式指定使用POST方式传递数据
+-b name=data 从服务器响应set-cookie得到值，返回给服务器
+
+elinks工具：
+elinks [OPTION]... [URL]...
+-dump: 非交互式模式，将URL的内容输出至标准输出
+-source:打印源码LAMP：linux+apache+mysql+php
+APR 对外发布接口，开发接口
+
+httpd自带的工具程序
+htpasswd：basic认证基于文件实现时，生成用户的口令文件
+apachectl：httpd自带的服务控制脚本，支持start和stop
+rotatelogs：日志滚动工具
+
+httpd的压力测试工具
+ab [OPTIONS] URL
+来自httpd-tools包
+-n：总请求数
+-c：模拟并发访问量
+-k：以持久连接模式测试
+ulimit –n # 调整能打开的文件数(默认1024)
+例：ab -c 10 -n 200 192.168.34.17/index.html
+
+APR可移植运行库
+为上层的应用程序提供一个可以跨越多操作系统平台使用的底层支持接口库 (http://httpd.apache.org/test/flood)
+APACHE    开发服务
+API    应用程序编程接口
+APR   可移植运行库
+SYSTEM  系统层
+
+--安装编译httpd-2.4▲
+依赖于apr-1.4+, apr-util-1.4+,  解决跨平台实现
+下载源代码并解压缩：
+apr-1.6.5.tar.bz2  apr-util-1.6.1.tar.bz2  httpd-2.4.37.tar.bz2
+安装前准备开发包：
+开发环境包：
+包组：Development Tools
+相关包：pcre-devel，openssl-devel expat-devel  依赖包
+
+yum groupinstall 'Development Tools' 安装开发包组
+yum install  pcre-devel正则 openssl-devel加密 expat-devel -y
+安装相关包
+mkdir src；并添加↑以上3个压缩包到目录
+tar xvf apr-1.6.5.tar.bz2
+tar xvf apr-util-1.6.1.tar.bz2
+tar xvf httpd-2.4.37.tar.bz2
+cp -r apr-1.6.5  httpd-2.4.37/srclib/apr
+cp -r apr-1.6.5  httpd-2.4.37/srclib/apr-util
+cd httpd-2.4.34/
+./configure \
+--prefix=/app/httpd24 \
+--enable-so \
+--enable-ssl \
+--enable-cgi \
+--enable-rewrite \
+--with-zlib \
+--with-pcre \
+--with-included-apr \
+--enable-modules=most \
+--enable-mpms-shared=all \
+--with-mpm=prefork
+make j 2&& make install  编译安装
+#Httpd编译过程：/app/httpd24/build/config.nice
+#自带的服务控制脚本：/app/httpd24/bin/apachectl
+echo 'PTAH:/app/httpd24/bin:$PATH' > /etc/profile.d/httpd24.sh  加入默认path路径
+apachectl  启动服务
+通过浏览器登录，测试!!
+mkdir /data/{a,b}site -pv 创建网站目录
+echo www.a.com > /data/asite/index.html
+echo www.b.net > /data/bsite/index.html
+cd /app/httpd24/conf
+vim /httpd.conf
+Include conf/extra/httpd-vhosts.conf 启用虚拟机配置模板
+vim  /extra/httpd-vhosts.conf
+<VitrualHost *:80>
+DocumentRoot "/data/asite/"
+Servername www.a.com
+ErrorLog "logs/a.com-error_log"
+CustomLog "logs/a.com-access_log" common
+<directory /data/asite>
+require all granted
+</directory>
+</VitrualHost>
+然后重启服务 (www.b.net 写法同上↑↑↑)
+vim /etc/rc.local
+/app/httpd24/bin/apachectl  添加程序到开机自启
+chmod +x /etc/rc.local 添加执行权限
+6：curl www.a.com ；curl www.b.net 访问测试
+重启测试是否开机自启..
+
+--自定义启动脚本（适合于centos6）
+6：scp /etc/init.d/httpd 192.168.34.27:/etc/init.d/httpd24 
+拷贝服务启动脚本
+7：vim /etc/init.d/httpd24
+apachectl=/app/httpd24/bin/apachectl
+httpd=${HTTPD-/app/httpd24/bin/httpd}
+pidfile=${PIDFILE-/app/httpd24/logs/httpd.pid} 指定进程目录
+chkconfig -add httpd24   
+chkconfig -list httpd24
+
+【实现LAMP架构】
+LAM(M)P
+L: linux
+A: apache (httpd)
+M: mysql, mariadb
+M:memcached  缓存，加速数据的访问
+P: php, perl, python
+
+WEB资源类型：
+静态资源：原始形式与响应内容一致，在客户端浏览器执行
+动态资源：原始形式通常为程序文件，需要在服务器端执行之后，将执行
+Web相关语言
+客户端技术： html，javascript，css，jpg  静态资源
+服务器端技术：php， jsp，python，asp  动态资源
+
+组合提供服务
+apache：提供静态资源
+cgi：处理动态程序 （php主流-fastcgi服务）
+mysql：提供存储数据
+
+PHP:php: 脚本编程语言、嵌入到html中的嵌入式web程序语言，适合于快速开发网站，但稳定性不如java
+Zend Engine是开源的、PHP脚本语言的解释器
+执行过程：
+test.php --> opcode 二进制内存 --> 机器码
+当其他用户再次访问test.php，opcode会直接从内存执行，而不需要再次对test.php做转换，从而提升效率
+hellp.sh -->机器码 效率低
+
+yum install php  安装php模块使apache能扩展php的功能
+配置文件：/etc/php.ini  ;  /etc/php.d/*.ini
+
+php：脚本语言解释器
+配置文件：/etc/php.ini, /etc/php.d/*.ini
+配置文件在php解释器启动时被读取
+对配置文件的修改生效方法
+Modules：重启httpd服务
+FastCGI：重启php-fpm服务
+/etc/php.ini配置文件格式：
+[foo]：Section Header
+directive = value
+
+--PHP设置
+max_execution_time= 30 最长执行时间30s
+memory_limit 128M 生产不够，可调大
+display_errors off 调试使用，不要打开，否则可能暴露重要信息
+display_startup_errors off 建议关闭
+post_max_size 8M 最大上传数据大小，生产可能临时要调大，比下面项要大
+upload_max_filesize 2M 最大上传文件，生产可能要调大
+max_file_uploads = 20 同时上传最多文件数
+date.timezone =Asia/Shanghai 指定时区
+short_open_tag=on 开启短标签,如<? phpinfo();?>
+
+例：
+格式1 (php代码嵌套html)
+<?php
+echo "<h1>Hello world!</h1>"
+?>
+格式2 (html代码嵌套php)
+<h1>
+<?php echo "Hello world!" ?>
+</h1>
+
+php测试代码(显示小时分)
+<?php
+echo date("Y/m/d H:i:s");  
+phpinfo();
+?>
+
+
+--通过PHP连接数据库
+7php客户端   27 数据库
+27：
+yum install mariadb 
+systemctl start mariadb
+mysql
+grant all on *.* to test@'192.168.34.%' identified by 'centos';
+
+7 :(已安装apache)
+yum install php-mysql (连接mysql的客户端程序)
+vim /var/www/html/mysqlli.php 
+#php使用mysqli扩展连接数据库的测试代码
+<?php
+$mysqli=new mysqli("192.168.34.27",“test",“centos");
+if(mysqli_connect_errno()){
+echo "Failure";
+$mysqli=null;
+exit;
+}
+echo “OK";
+$mysqli->close();
+?>
+浏览器192.168.34.7/mysqli.php 测试 
+
+
+--LAMP配置实验  [linux-aphache-mariadb-php] 模块方式▲
+PhpMyAdmin是一个以PHP为基础，以Web-Base方式架构在网站主机上的MySQL的数据库管理工具，可用Web接口管理MySQL数据库
+
+WordPress是一种使用PHP语言开发的博客平台，用户可以在支持PHP和MySQL数据库的服务器上架设属于自己的网站。也可把 WordPress当作一个内容管理系统（CMS）来使用
+
+7：
+yum -install   php  php-mysql  mariadb-server  httpd
+cd /var/www/html/
+rz phpMyAdmin-4.0.10.20-all-languages.tar.xz ▲web数据库管理工具
+tar xvf phpMyAdmin-4.0.10.20-all-languages.tar.xz 解压
+mv phpMyAdmin-4.0.10.20-all-languages.   pma 改名
+cd pma
+mv config.sample.inc.php  config.inc.php 修改去掉范例配置名称
+vim config.inc.php
+$cfg ['blowfish_secret'] = 'xxxxrandomxxxx';  生成随机口令
+mysql
+mysql_secure_installation  mysql安全脚本
+设置root口令 cenots；y；n；y
+yum install php-mbstring -y  安装依赖包 (实现字符串处理)
+systemctl restart httpd 重启服务
+ 192.168.34.7/pma/  网站登录web数据库
+#新建数据库wordpress
+#创建用户wpuser，授权在192.168.34.%访问，密码centos
+#编辑用户wpuser权限→wordpress数据库→授管理员权限(全选)
+↑（grant all privileges on 'wordpress'.* to 'wpuser'@'192.168.34.%' with grant option; ）
+
+cd /var/www/html
+rz wordpress-5.0-zh_CN.zip  博客搭建平台▲
+uzip  wordpress-5.0-zh_CN.zip
+cd wordpress
+rpm -q php php-mysql mariadb-server httpd 
+cd wordpress/
+mv wp-config-sample.php wp-config-sample.php 去掉范例配置名称
+vim wp-config-sample.php 
+define('DB_NAME','WORDPRESS');
+define('DB_USER','WPUSER');
+define('DB_PASSWORD','centos');
+define('DB_HOST','192.168.34.7');
+
+192.168.34.7/wordpress/  网站登录验证
+依次添加：#标题  #用户名 #密码 #邮箱 ；安装wordpress
+>use wordpress   > show tables;   验证后再网站登录查看
+
+
+#www.discuz.net  论坛官网
+cd  /var/www/html
+rz  Discuz_X3.3_SC_UTF8.zip▲ 论坛搭建平台
+unzip  Discuz_X3.3_SC_UTF8.zip 解压 [upload/utility/readme]
+setfacl -R -m u:apache:rwx upload/   授权(平台搭建完后建议取消)
+192.168.34.7/upload/    论坛登录验证
+#同意  #全新安装discuz #数据库服务器localhost
+#数据库名ultrax  #数据库用户名root  #数据库密码centos
+#管理员账户admin #管理员密码centos  #开始安装
+>show databases;  >use ultrax ; show tables 验证
+
+--fastcgi
+7：
+yum install httpd
+vim /etc/httpd/conf.d/fcgi.conf
+DirectoryIndex index.php
+ProxyRequests Off
+ProxyPassMatch ^/(.*\.php)$ fcgi://192.168,34,17:9000/data/html/$1
+只要匹配到*.php文件就发送给34.17
+echo 192.168.34.7 > /var/www/html/index.html
+重启服务；
+rz w.tar.gz 博客搭建平台
+tar xvf wordpress-4.9.4-zh_CN.tar.gz
+
+17：
+yum install php-fpm（fastcgi模块） php-mysql
+vim /etc/php-fpm.d/www.conf
+listen=9000  设置侦听的端口(httpd连接)
+#listen.allowed_clients=192.168.34.7 允许哪个地址连接(注释默认any)
+systemctl restart php-fpm.service；ss -ntl 查看9000端口是否开启
+vim /etc/httpd/conf.d/fcgi.com
+mkdir /data/html
+vim pdo.php   (使用pdo扩展连接数据库的测试代码)
+<?php
+try {
+$user='test';
+$pass='centos';
+$dbh = new PDO('mysql:host=192.168.34.27;dbname=mysql’, $user,$pass);
+foreach($dbh->query('SELECT user,host from user') as $row) {
+print_r($row);
+}
+$dbh = null;
+} catch (PDOException $e) {
+print "Error!: " . $e->getMessage() . "<br/>";
+die();
+}
+?>
+win：浏览器访问192.168.34.7及192.168.34.7/pdo.php 测试！
+cd /data/html
+rz wordpress-4.9.4-zh_CN.tar.gz 博客搭建平台
+tar xvf wordpress-4.9.4-zh_CN.tar.gz
+cd wordpress/
+cp wp-config-sample.php  wp-config.php  去掉范例配置名称
+vim  wp-config-sample.php
+define('DB_NAME','wordpress');
+define('DB_USER','test');
+define('DB_PASSWORD','centos');
+define('DB_HOST','192.168.34.27');
+wim :浏览器访问192.179.34.7/wordpress/index.php  测试并注册博客！
+ab -c 20 -n 100 192.168.34.7/wordpress/ 测试主页处理速度
+每秒可接受多少个请求
+
+27：
+yum  install mariadb  
+>grant all on *.* to test@'192.168.34.%' identified by 'centos';
+>create database wodpress
+
+
+--php加速器
+php的加速器：基于PHP的特殊扩展机制如opcode缓存扩展也可以将opcode缓存于php的共享内存中，从而可以让同一段代码的后续重复执行时跳过编译阶段以提高性能。这些加速器并非真正提高了opcode的运行速度，而仅是通过分析opcode后并将它们重新排列以达到快速执行的目的
+
+php7.0以上不用加速，经过大量的优化，性能比优化过的相差无几
+--------------------------------------------------------------------------I
+第三十六节课 2018年12月15日  周六
+--------------------------------------------------------------------------I
+client--http--apache(php模块)-->mysql
+
+client--http-->apache:80-->fastcgi(php-fpm):9000--mysql-->mysql
+异构协议反向代理
+client--http-->apache:80-->apache:httpserver
+同构协议反向代理
+
+apache --PHP模块  方式实现↓功能
+PHP(fastcgi) 二进制编译服务器
+
+xcache所有php程序共享内存-->opcode
+yum install  php-xcache  php加速模块
+
+--php-xcache 加速模块测试▲
+27：
+yum install mariadb
+>grant all on *.* test@'192.168.34.%' indentified by 'centos';
+>create database wordpress;
+7：
+yum install hpptd php php-mysql 
+cd /var/www/html
+rz wordpress-4.9.4-zh_CN.tar.gz
+tar xvf wordpress-4.9.4-zh_CN.tar.gz ; cd wordpress/
+cp -av . /var/www/html/ 设置可通过网站更目录访问博客
+mv wp-config-sample  wp-config
+cp wp-config-sample.php  wp-config.php  去掉范例配置名称
+vim  wp-config-sample.php
+define('DB_NAME','wordpress');
+define('DB_USER','test');
+define('DB_PASSWORD','centos');
+define('DB_HOST','192.168.34.27');
+systemctl start httpd; 
+win : 192.168.34.7  访问博客测试！
+ab -c 10 -n 200 192.168.34.7 访问速度测试
+↑（requests per second：7.58  每秒钟可接受7.58个请求）
+yun install php-xcache （PHP加速模块）
+systemctl restart httpd
+ab -c 10 -n 200 192.168.34.7 再次访问速度测试
+↑（requests per second：10.04  每秒钟可接受10.04个请求）
+
+--编译安装 xcache▲
+rz xcache-3.2.0.tar.gz
+tar xvf xchache-3.2.0.tar.gz ； cd  xcache-3.2.0/
+yum groupinstall 'developments tools'
+yum install php-devel  安装php开发包
+phpize 通过运行该工具生成configure（来自于php-cli-5.4...）
+./configure --prefix=/app/xcache --enable=xcache
+make && make instsall
+cp  /app/xcache/xcache.ini  
+复制xcache配置文件到php的配置目录，扩展php模块功能
+systemctl restart httpd
+vim /etc/ww/html
+<?php
+phpinfo()
+?>
+win：192.168.34.7/phpinfo.php  验证是否加载xcache模块
+ab -c 10 -n 200  192.168.34.7  测试性能！
+（26.52 rps 大概提升1.5倍性能）
+
+
+--centos7编译安装LAMP
+在centos7上编译安装LAMP：
+mairadb：通用二进制格式，mariadb-5.5.56
+httpd：编译安装，httpd-2.4.25
+php5：编译安装，php-5.6.30
+phpMyAdmin：安装phpMyAdmin-4.4.15.10-all-languages
+Xcache：编译安装xcache-3.2.0
+php5.4依赖于mariadb-devel包
+顺序：mariadb-->httpd-->php
+
+--lamp编译安装 以fastcgi方式实现▲
+apache（编译） mariadb（不编译）  php（编译）
+7：lap [http/php]   17：mysql
+
+7：
+mkdir src ； cd src  
+rz  apr-1.6.5.tar.bz2  apr-util-1.6.1.tar.bz2
+httpd-2.4.37.tar.bz2|wordpress-4.9.4-zh_CN.tar.gz|php-7.1.18.tar.bz2
+tar xf apr-1.6.5.tar.bz2
+tar xf apr-util-1.6.1.tar.bz2
+tar xf httpd-2.4.37.tar.bz2
+cp -r apr-1.6.5 http-2.4.37/srclib/apr
+cp -r apr-util-1.6.1 http-2.4.37/srclib/apr-util
+##编译httpd+apr 依赖包
+cd http-2.4.37/
+yum gruopinstall "development tools"
+yum install pcre-devel  openssl-devel  expat-devel -y
+./configure \
+--prefix=/app/httpd24 \
+--enable-so \
+--enable-ssl \
+--enable-cgi \
+--enable-rewrite \
+--with-zlib \
+--with-pcre \
+--with-included-apr \
+--enable-modules=most \
+--enable-mpms-shared=all \
+--with-mpm=prefork
+make j 2 && make install
+[自带的服务控制脚本：/app/httpd24/bin/apachectl]
+useradd -r -s /sbin/nologin apache 创建httpd服务账号
+cd /app/httpd24
+echo 'PATH=/app/httpd24/bin:$PATH' > /etc/profile.d/lamp.sh
+.  /etc/profile.d/lamp.sh   把httpd主程序添加到PATH命令
+vim /app/httpd24/conf/httpd.conf 更改主程序所用账号[daemon]
+user apache
+group apache
+apachectl start  ； win ： 192.168.34.7  登录测试!
+
+##fastcgi方式编译安装php-7.1.18
+yum  install libxml2-devel bzip2-devel libmcrypt-devel (epel)
+安装PHP编译所需的依赖包
+cd /root/src
+tar xf php-7.1.18.tar.bz2
+cd php-7.1.18/
+./configure --prefix=/app/php \
+--enable-mysqlnd \
+--with-mysqli=mysqlnd \
+--with-openssl \
+--with-pdo-mysql=mysqlnd \
+--enable-mbstring \
+--with-freetype-dir \
+--with-jpeg-dir \
+--with-png-dir \
+--with-zlib \
+--with-libxml-dir=/usr \
+--enable-xml \
+--enable-sockets \
+--enable-fpm \
+--with-config-file-path=/etc \
+--with-config-file-scan-dir=/etc/php.d \
+--enable-maintainer-zts \
+--disable-fileinfo
+make j 2 && make install
+-------
+vim /app/http24/conf/httpd.conf   添加httpd配置文件 
+ AddType application/x-httpd-php .php 识别PHP
+ AddType application/x-httpd-php-source .phps 识别PHPS
+ProxyRequests Off
+ProxyPassMatch ^/(.*\.php)$ fcgi://127.0.0.1:9000/app/httpd24/htdocs/$1
+ DirectroyIndex  index.php index.html 添加页面默认访问index.php
+ apachectl stop ； apachectl start 重启服务以支持php
+ 取消下面两行的注释(启用下面两个模块)
+#LoadModule proxy_module modules/mod_proxy.so
+#LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so
+--------
+cd  /src/php-7.1.18/
+cp php.ini-production  /etc/php.ini  拷贝php配置文件
+cp sapi/fpm/init.d/php-fpm  /etc/init.d/php-fpm 拷贝启动脚本
+chmod  +x  /etc/init.d/php-fpm 添加权限
+chkconfig -add php-fpm  添加到service服务可启动项
+chkconfig php-fpm on 添加到开机自启
+cd /app/php/etc
+cp php-fpm.conf.default  php-fpm.conf 配置文件更名
+cp php-fpm.d/www.conf.default  php-fpm.d/www.conf 更名
+vim php-fpm.d/www.conf 
+listen = 127.0.0.1:9000  侦听本机 9000端口
+service php-fpm start; ss -ntl 启动服务查看9000端口是否启用
+apachectl stop ; apache start
+win 192.168.34.7 验证
+6：ab -c 10 -n 200 192.168.34.7/  测试性能 14.55（用加速26）
+
+##PHP添加端口侦听方式  【有BUG，网页可能打不开】
+#vim php-fpm.d/www.conf 
+##listen= /tmp/php-fpm.sock
+#service php-fpm restart 重启服务
+#vim /app/httpd24/conf/httpd.conf 改成套接字转发php脚本
+#ProxyPassMatch "^/(.*\.php)$"  "unix:/var/run/fpm.sock| fcgi://127.0.0.1/app/httpd24/htdocs/"
+##apachectl stop ; apachectl start
+vim  /ap/pap/etc/php-fpm/d/www.conf
+#user = apache
+#group = apache
+vim php-fpm.d/www.conf 
+##listen = 127.0.0.1:9000  注释该行
+#listen.mode = 0666 添加权限
+[hpptd主程序用账户↑]
+
+cd /src ; tar  xvf  wordpress-4.9.4-zh_CN.tar.gz  博客搭建平台
+mv * /app/httpd24/htdocs/  迁移博客配置文件到指定目录
+cd /app/httpd24/htdocs/ ;mv wp-config-sample.php  wp-config.php
+vim wp-config.php
+define('DB_NAME','wpdb');
+define('DB_USER','wpuser');
+define('DB_PASSWORD','centos');
+define('DB_HOST','192.168.34.17');
+
+
+17：
+##二进制安装mariadb
+rz mariadb-10.2.19-linux-x86_64.tar.gz
+tar xvf mariadb-10.2.19-linux-x86_64.tar.gz  -C /usr/local/
+cd /usr/local/
+useradd -s /sbin/nologin -r  mysql  -d /data/mysql
+chown -R root.root mariadb-10.2.19-linux-x86_64/
+ln -s mariadb-10.2.19-linux-x86_64/  mysql
+cd  /usr/local/mysql/
+mkdir /data/mysql
+chown mysql.mysql  /data/mysql
+scripts/mysql_install_db --usr=mysql --datadir=/data/mysql
+生成mysql数据库到/data/mysql目录
+cp support-files/my-huge.cnf /etc/mysql/my.cnf  复制配置文件
+vim /etc/mysql/my.cnf
+datadir=/data/mysql
+cp support-files/mysql.server  /etc/init.d/mysqld 复制启动脚本
+chkconfig  -add mysql 添加到开启自启
+echo 'PATH=/usr/local/mysql/bin:$PATH' >/etc/profile.d/mysql.sh
+. /etc/profile.d/mysql.sh
+service mysqld start  启动服务
+>create database wpdb;
+>grant all on wpdb.*  to wpuser@'192.168.34.%' indentified by 'centos';
+
+
+【日志管理】
+rsyslog特性：CentOS6和7
+多线程
+UDP, TCP, SSL, TLS, RELP
+MySQL, PGSQL, Oracle实现日志存储
+强大的过滤器，可实现过滤记录日志信息中任意部分
+自定义输出格式
+
+程序包：rsyslog
+主程序：/usr/sbin/rsyslogd
+CentOS 6：service rsyslog {start|stop|restart|status}
+CentOS 7：/usr/lib/systemd/system/rsyslog.service
+配置文件：/etc/rsyslog.conf，/etc/rsyslog.d/*.conf
+库文件： /lib64/rsyslog/*.so
+配置文件格式：由三部分组成
+MODULES：相关模块配置
+GLOBAL DIRECTIVES：全局配置
+RULES：日志记录相关的规则配置
+
+术语，参见man logger
+facility：设施，从功能或程序上对日志进行归类
+auth, authpriv, cron, daemon,ftp,kern, lpr, mail, news, security(auth), user, uucp, local0-local7, syslog
+Priority 优先级别，从低到高排序
+debug, info, notice, warn(warning), err(error), crit(critical), alert, emerg(panic)
+
+事件记录格式：
+日期时间 主机 进程[pid]: 事件内容
+
+log -p local0.info  "sshd event start"  
+模拟local0事件，在info级别，触发一个日志
+
+vim /etc/rsyslog.conf  
+local1.*    root  表示只要local1触发的事件，给root用户发广播
+
+-/var/log/maillog   -代表异步写入，先写入buffer，再写入磁盘
+大部分日志都是同步写入，避免丢失重要日志
+
+--独立ssh日志
+vim /etc/ssh/sshd_config
+SyslogFacility local0
+vim /etc/rsyslog.conf    添加主 配置文件
+local0.*    /var/log/sshd.log   把local0的所有时间都记录文件(自动生成)
+systemctl restart sshd rsyslog  重启服务
+tail /var/log/sshd.log  远程ssh登录后，跟踪日志
+（软件是基于rsyslog开发才可以记录）
+有点软件自身有管理日志的机制，如apache/mysql 可不用rsyslog
+
+
+
+RULES配置格式： facility.priority; facility.priority… target
+facility：
+*: 所有的facility
+facility1,facility2,facility3,...：指定的facility列表
+priority：
+*: 所有级别
+none：没有级别，即不记录
+PRIORITY：指定级别（含）以上的所有级别
+=PRIORITY：仅记录指定级别的日志信息
+target：
+文件路径：通常在/var/log/，文件路径前的-表示异步写入
+用户：将日志事件通知给指定的用户，* 表示登录的所有用户
+日志服务器：@host，把日志送往至指定的远程服务器记录
+管道： | COMMAND，转发给其它命令处理
+
+@1.1.1.1 发往UPD协议   @@1.1.1.1 发往TCP协议 
+
+--异地存放日志
+  7发送日志   17提供日志服务[提供网络监听端口]  
+17：
+vim /etc/rsyslog.conf  启用upd模块，并且监听514端口
+##MODULES##
+$Modload imudp  网络相关模块
+$UPDServerRun 514 监听端口
+systemctl restart rsyslog 重启服务
+7：
+vim /etc/rsyslog.conf  设置转发日志 
+##RULES##
+*.info;mail.none;authpriv.none;cron.none       @192.168.34.17
+把所有事件的所有等级都发往34.17 
+systemctl restart rsyslog 重启服务
+
+--其它的日志文件
+/var/log/secure：系统安装日志，文本格式，应周期性分析
+/var/log/btmp：失败登录登录，二进制格式；lastb查看
+/var/log/wtmp：正常登录日志，二进制格式；last查看
+/var/log/lastlog：每位用户最近一次登录信息，二进制；lastlog查看
+/var/log/dmesg：系统引导过程中的日志信息，文本格式
+专用命令dmesg查看
+/var/log/anaconda : anaconda的日志
+
+--日志管理journalctl
+Systemd 统一管理所有 Unit 的启动日志
+查看所有日志（默认情况下 ，只保存本次启动的日志）
+journalctl
+查看内核日志（不显示应用日志）
+journalctl -k
+查看系统本次启动的日志
+journalctl -b
+查看上一次启动的日志（需更改设置）
+journalctl -b -1
+指定日志时间范围
+journalctl --since "2017-01-10" --until "2017-01-11 03:00"
+
+
+--rsyslog将日志记录于MySQL中
+7：生成日志 ； 17：数据库
+17：
+yum install mariadb-server -y ；安装并启动服务
+mysql  < mysql-createDB.sql 倒入Syslog表
+>GRANT ALL ON Syslog.* TO 'loguser'@'HOST' IDENTIFIED BY 'centos';
+创建账号，让loguser对Syslog有管理员权限
+
+7：
+yuminstall rsyslog-mysql 安装mysql模块相关的程序包
+yum -ql rsyslog-mysql 查看有生成对文件列表
+scp /usr/shre/doc/rsyslog-8.24.0/mysql-createDB.sql 192.168.24.17
+把生成的数据库表复制到37.17
+yum install mariadb
+mysql -uloguser -pcentos -h192.168.34.17  登录测试
+vim /etc/rsyslog.conf
+$ModLoad ommysql  启用添加mysql功能模块
+*.info;mail.none;authpriv.none;cron.none  
+:ommysql:192.168.34.17,Syslog,loguser,centos
+[模块名：对方ip：生成的数据名称：账号：密码]
+systemctl restart rsyslog
+select * from Syslog  验证
+
+--通过loganalyze展示数据库的日志
+27：
+yum install httpd php php-mysql -y
+systemctl start httpd
+tar xf loganalyzer-4.1.5.tar.gz
+cp -a loganalyzer-4.1.5/src /var/www/html/log 源码包
+cd /var/www/html/log
+touch config.php
+chmod 666 config.php
+win：192.168.34.27/log/ 点击安装完成后，再把权限改成644▲[安全]
+#Table type ： 192.168.34.17
+#database host  ： Syslog
+#database tablename： SystemEvents 读取日志数据
+#datbase user  ： loguser
+#database password ： centos
+[如果要重装loganalyze，删除config.php，网页登录创建即可生成]
+yum install php-gd  安装php画图模块,重启http服务,在登录即可生效
+
+--Logrotate 日志转储|滚动 [把大日志切割成若干小的日志]
+主要参数：
+compress 通过gzip 压缩转储以后的日志
+nocompress 不需要压缩时，用这个参数
+copytruncate 用于还在打开中的日志文件，把当前日志备份并截断
+nocopytruncate 备份日志文件但是不截断
+create mode owner group 转储文件，使用指定的文件模式创建新的日志文件
+nocreate 不建立新的日志文件
+delaycompress 和 compress 一起使用时，转储的日志文件到下一次转储时才压缩
+nodelaycompress 覆盖 delaycompress 选项，转储并压缩
+errors address 专储时的错误信息发送到指定的Email 地址
+ifempty 即使是空文件也转储，是缺省选项。
+notifempty 如果是空文件的话，不转储
+mail address 把转储的日志文件发送到指定的E-mail 地址
+nomail 转储时不发送日志文件
+olddir directory 转储后的日志文件放入指定的目录，必须和当前日志文件在同一个文件系统
+noolddir 转储后的日志文件和当前日志文件放在同一个目录下
+prerotate/endscript 在转储以前需要执行的命令可以放入这个对，这两个关键字必须单独成行
+postrotate/endscript 在转储以后需要执行的命令可以放入这个对，这两个关键字必须单独成行
+daily 指定转储周期为每天
+weekly 指定转储周期为每周
+monthly 指定转储周期为每月
+size 大小 指定日志超过多大时，就执行日志转储
+rotate count 指定日志文件删除之前转储的次数，0 指没有备份，5 指保留5 个备份
+Missingok 如果日志不存在，提示错误
+Nomissingok如果日志不存在，继续下一次日志，不提示错误
+
+
+
+【网络文件共享服务】
+FTP--NFS--SAMBA
+DAS：直连式存储,中间连接数据线 数据块方式存储
+NFS：网络文件系统,文件服务器，文件方式存储
+SAN：存储区域网络，数据库应用，数据块方式存储
+
+双通道协议：数据和命令连接
+数据传输格式：二进制（默认）和文本
+两种模式：服务器角度
+主动(PORT style)：服务器主动连接
+命令（控制）：客户端：随机port --->服务器：tcp21
+数据：客户端：随机port <---服务器：tcp20
+被动(PASV style)：客户端主动连接 
+命令（控制）：客户端：随机port ---> 服务器：tcp21
+数据：客户端：随机port --->服务器：随机port【端口不固定】
+服务器被动模式数据端口示例：
+227 Entering Passive Mode (172,16,0,1,224,59)
+服务器数据端口为：224*256+59
+例：
+ftp 192.168.18.1 可登录FTP服务器
+ls  可显示协商的数据端口
+passive  被动模式关闭/开启  [默认主动模式]
+
+
+--FTP软件
+vsftpd:Very Secure FTP Daemon，CentOS默认FTP服务器
+高速，稳定，下载速度是WU-FTP的两倍
+ftp.redhat.com数据:单机最多可支持15000个并发
+客户端软件：
+ftp，lftp，lftpget，wget，curl
+
+选项：
+--ftp x.x.x.x
+-A 主动模式  
+-p  被动模式
+get 下载 
+mget  xxx*  多个文件下载
+--lftp  x.x.x.x [添加颜色，更容易区分文件夹，支持补全]
+-u user 或  username@x.x.x.x
+--gftp x.x.x.x [centos6之前 图形化工具]
+filezilla，CuteFtp，FlashFXP，LeapFtp
+
+状态码：
+1XX：信息 125：数据连接打开
+2XX：成功类状态 200：命令OK 230：登录成功
+3XX：补充类 331：用户名OK
+4XX：客户端错误 425：不能打开数据连接
+5XX：服务器错误 530：不能登录
+
+--vsftpd服务
+用户认证配置文件：/etc/pam.d/vsftpd
+服务脚本： /usr/lib/systemd/system/vsftpd.service
+/etc/rc.d/init.d/vsftpd
+配置文件：/etc/vsftpd/vsftpd.conf
+man 5 vsftpd.conf
+格式：option=value
+注意：= 前后不要有空格
+匿名账号：ftp 、anonymous [默认只允许下载]
+>ftp 192.168.34.7
+>lcd /mnt   切换本地路径
+>get xx 下载
+>ls 查看ftp目录  ； >!ls 查看本地目录
+>pwd 查看ftp路径 ； >!pwd 查看本地所在路径
+>rm 删除ftp文件  ； > !rm 删除本地文件
+>put xx 上传
+set -m u:ftp:rwx /var/grp/upload 匿名账号授权
+
+--服务配置
+命令端口
+listen_port=21
+主动模式端口
+connect_from_port_20=YES 主动模式端口为20
+ftp_data_port=20 （默认） 指定主动模式的端口
+被动模式端口范围
+linux 客户端默认使用被动模式
+windows 客户端默认使用主动模式
+pasv_min_port=6000 0为随机分配
+pasv_max_port=6010 [定义端口范围]
+使用当地时间
+use_localtime=YES 使用当地时间（默认为NO，使用GMT） 
+/var/ftp/pub  公共用户目录
+/var/log/xfer  查看vsftpd服务日志
+/var/log/vsftpd.log 查看vsftpd服务日志
+
+匿名用户：
+anonymous_enable=YES 支持匿名用户
+no_anon_password=YES(默认NO) 匿名用户略过口令检查 anon_world_readable_only (默认YES)只能下载全部读的文件
+anon_upload_enable=YES 匿名上传，注意:文件系统权限
+anon_mkdir_write_enable=YES 匿名建目录
+anon_umask=0333 指定匿名上传文件的umask，默认077
+anon_other_write_enable=YES 可删除和修改上传的文件
+
+指定上传文件的默认的所有者和权限
+chown_uploads=YES(默认NO)
+chown_username=wang
+chown_upload_mode=0644
+
+Linux系统用户：
+local_enable=YES 是否允许linux用户登录
+write_enable=YES 允许linux用户上传文件
+local_umask=022 指定系统用户上传文件的默认权限
+guest_enable=YES 所有系统用户都映射成guest用户
+guest_username=ftp 配合上面选项才生效，指定guest用户[]
+local_root=/ftproot guest用户登录所在目录
+[只能755权限，且不再进入家目录，要ftp根，都不能写]
+禁锢所有系统用户在家目录中
+chroot_local_user=YES（默认NO，不禁锢）禁锢系统用户
+禁锢或不禁锢特定的系统用户在家目录中，与上面设置功能相反 chroot_list_enable=YES
+chroot_list_file=/etc/vsftpd/chroot_list 禁锢白名单
+当chroot_local_user=YES时，则chroot_list中用户不禁锢
+当chroot_local_user=NO时，则chroot_list中用户禁锢
