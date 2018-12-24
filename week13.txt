@@ -1,0 +1,1013 @@
+第三十七节课 2018年12月18日  周二
+--------------------------------------------------------------------------I
+
+默认情况，root禁止登陆ftp，因为是明文，不安全
+当chroot_local_user=NO 时-->黑名单，=YES-->白名单
+chroot_list_enbale=YSE  启用名单列表
+chroot_list_file=/etc/vsftpd/chroot_list 白名单默认转换成黑名单
+
+
+##/etc/vsftd/vsftpd.conf##
+--wu-ftp日志：默认启用
+xferlog_enable=YES （默认） 启用记录上传下载日志
+xferlog_std_format=YES （默认） 使用wu-ftp日志格式
+xferlog_file=/var/log/xferlog （默认）可自动生成
+--vsftpd日志：默认不启用
+dual_log_enable=YES 使用vsftpd日志格式，默认不启用
+vsftpd_log_file=/var/log/vsftpd.log（默认）可自动生成
+--登录提示信息
+ftpd_banner=“welcome to mage ftp server"
+banner_file=/etc/vsftpd/ftpbanner.txt 优先上面项生效
+例：vim ftpbanner.txt
+^[[31m welcome to magedu
+2018-12-18^[[0m  ##提示符加红色，重启服务生效
+--目录访问提示信息
+dirmessage_enable=YES (默认启用)
+message_file=.message(默认) 信息存放在指定目录下.message
+例: vim  /var/ftp/upload/.message
+#upload dir     [切换到upload目录后提示信息]
+
+--使用pam (Pluggable Authentication Modules)完成用户认证
+pam_service_name=vsftpd
+pam配置文件:/etc/pam.d/vsftpd
+/etc/vsftpd/ftpusers 默认文件中用户拒绝登录ftp[立即生效]
+vim /etc/pam.d/vsftpd
+#auth required pam_listfile.so item=user sense=allow
+当改成sense=allow后，ftpusers文件中用户允许登录，不在的不允许
+[root要登录，除了修改ftpusers文件，还要去掉黑名单才能生效] ↓
+
+--是否启用控制用户登录的列表文件
+vim /etc/vsftpd/user_list   黑名单列表
+userlist_enable=YES 默认有此设置
+userlist_deny=YES(默认值) 黑名单,不提示口令，NO为白名单
+userlist_file=/etc/vsftpd/users_list 此为默认值
+
+--vsftpd服务指定用户身份运行
+nopriv_user=nobody (默认值)
+连接数限制
+max_clients=0 最大并发连接数 [最多有多少人连我]
+max_per_ip=0 每个IP同时发起的最大连接数
+
+--传输速率：字节/秒
+anon_max_rate=0 匿名用户的最大传输速率
+local_max_rate=0 本地用户的最大传输速率
+--连接时间：秒为单位
+connect_timeout=60 主动模式数据连接超时时长
+accept_timeout=60 被动模式数据连接超时时长
+data_connection_timeout=300 数据连接无数据输超时时长
+idle_session_timeout=60 无命令操作超时时长
+--优先以文本方式传输
+ascii_upload_enable=YES
+ascii_download_enable=YES
+ftp>?查命令列表
+ftp>ascii  切换成ascii模式 [会把linux换行变成回车+换行]
+▲传输文本可以用ascii，其他类型文件用binary[默认]
+
+配置FTP服务以非独立服务方运行vim /etc/vsftpd/vsftpd.conf
+listen=NO，cento7默认为非独立方式，要依赖于xintd服务  
+[centos6为YES,默认为独立服务]
+vim /etc/xinetd.d/vsftpd  [centos7要更改，一般不用更改]
+service ftp
+{
+flags = REUSE
+socket_type = stream
+wait = no
+user = root
+server = /usr/sbin/vsftpd
+log_on_failure += USERID
+disable = no
+}
+
+tcpdump -D 查看本机网卡列表
+tupdump -i eth0 -nn -X port 21 抓取21端口信息
+
+--实现加密
+HTTP服务：-私钥文件--证书文件--证书链文件
+nginx服务：私钥文件--证书文件
+FTPS服务：（私钥文件+证书文件）合并
+--查看是否支持SSL
+ldd `which vsftpd` 查看到libssl.so
+
+--创建自签名证书
+cd /etc/pki/tls/certs--> Makefile
+make vsftpd.pem   生成合并文件[私钥xx.key+证书xx.crt]
+[国家；省；市；组织；单位；服务器名；]
+直接生成私钥文件，并且利用它做签名，并重定向到同一个文件
+#openssl x509 -in vsftpd.pem -noout –text 也可利用证书生成私钥
+mv  vsftpd.pem  /etc/vsftpd/ssl 把文件移到ssl目录
+
+--配置vsftpd服务支持SSL：/etc/vsftpd/vsftpd.conf
+ssl_enable=YES 启用SSL
+allow_anon_ssl=NO 匿名不支持SSL
+force_local_logins_ssl=YES 本地用户登录加密
+force_local_data_ssl=YES 本地用户数据传输加密
+rsa_cert_file=/etc/vsftpd/ssl/vsftpd.pem  证书文件路径
+测试：
+1）用filezilla等工具测试
+2）tupdump -i eth0 -nn -X port 21 抓取21端口信息
+
+虚拟用户：
+所有虚拟用户会统一映射为一个指定的系统帐号：访问共享位置，即为此系统帐号的家目录
+各虚拟用户可被赋予不同的访问权限，通过匿名用户的权限控制参数进行指定
+虚拟用户帐号的存储方式：
+奇数行为用户名，偶数行为密码
+db_load -T -t hash -f vusers.txt vus.db
+利用文件编码为hash格式
+
+--vsftpd虚拟用户▲
+一、创建并生成用户数据库文件
+vim /etc/vsftpd/vusers.txt
+user1
+centos
+user2
+magedu
+cd /etc/vsftpd/
+db_load -T -t hash -f vusers.txt vusers.db 利用文件编码为hash格式
+chmod 600 vusers.db
+二、创建用户和访问FTP目录
+useradd -d /data/ftproot -s /sbin/nologin vuser
+chmod +rx /data/ftproot/
+chmod -w /data/ftproot/
+chown vuser.vuser /data/ftproot
+mkdir /data/ftproot/upload ; mkdir /data/ftproot/download
+setfacl -m u:vuser:rwx /data/ftproot/upload
+三、创建pam配置文件
+vim /etc/pam.d/vsftpd.db
+auth required pam_userdb.so db=/etc/vsftpd/vusers
+表示认证要通过[生成的vusers.db默认不用加后缀]
+account required pam_userdb.so db=/etc/vsftpd/vusers
+验证账号密码正常使用
+四、指定pam配置文件
+vim /etc/vsftpd/vsftpd.conf
+guest_enable=YES  
+guest_username=vuser  指定来宾账号
+pam_service_name=vsftpd.db  pam认证模块引用
+五、SELinux设置：
+禁用SELinux 或者 setsebool -P ftpd_full_access 1
+六、虚拟用户建立独立的配置文件
+mkdir /etc/vsftpd/vusers.d/ 创建配置文件存放的路径
+vim /etc/vsftpd/vsftpd.conf
+user_config_dir=/etc/vsftpd/vusers.d/
+cd /etc/vsftpd/vusers.d/ 进入此目录
+允许user1用户可上传，其它用户只读
+vim user1 创建user1配置文件
+anon_upload_enable=YES
+anon_mkdir_write_enable=YES
+anon_other_write_enable=YES
+vim user2 创建user2配置文件
+local_root=/data/ftproot2 登录目录改变至指定的目录
+mkdir /data/ftproot2 [要使suer2有写权限，再加上面三行]
+setfacl  -m u:vuser:rwx upload  授权文件夹任何权限
+登录：lftp user2:magedu@192.168.34.7 测试
+
+
+--实现基于MYSQL验证的vsftpd虚拟用户▲
+7  ftp；17 数据库
+一、安装所需要包和包组：
+17：
+yum install mariadb-server
+ systemctl start mariadb
+7：
+yum groupinstall "development tools" 
+yum –y install mariadb-server
+yum -y install mariadb-devel pam-devel vsftpd
+tar xvf pam_mysql-0.7RC1.tar.gz
+cd pam_mysql-0.7RC1
+./configure --with-pam-mods-dir=/lib64/security --with-mysql=/usr --with-pam=/usr [安装路径， 关联数据库，关联pam]
+make && make install
+二、在数据库服务器上创建虚拟用户账号
+17：
+>CREATE DATABASE vsftpd;
+>CREATE TABLE users (
+id INT AUTO_INCREMENT NOT NULL PRIMARY KEY,
+name CHAR(50) BINARY NOT NULL,
+password CHAR(48) BINARY NOT NULL ); 
+#binary 二进制，可区分大小写
+>insert users (name,password) values('ftp1',password('centos')) ('ftp2',password('magedu'));  插入记录
+>grant select on vstfpd.users to vsfptd@'192.168.34.7'  indentified by 'centos';
+>FLUSH PRIVILEGES;  重读进程生效权限
+三、在FTP服务器上配置vsftpd服务
+1.在FTP服务器上建立pam认证所需文件
+vi /etc/pam.d/vsftpd.mysql 添加如下两行
+auth required pam_mysql.so user=vsftpd passwd=centos host=192.168.34.17 db=vsftpd table=users usercolumn=name passwdcolumn=password crypt=2
+account required pam_mysql.so user=vsftpd passwd=centos host=192.168.34.17 db=vsftpd table=users usercolumn=name passwdcolumn=password crypt=2
+#注意：参考README文档，选择正确的加密方式
+#crypt是加密方式，0表示不加密，1表示crypt(3)加密，2表示使用mysql #password()函数加密，3表示md5加密，4表示sha1加密
+
+2.建立相应用户和修改vsftpd配置文件，使其适应mysql认证
+建立虚拟用户映射的系统用户及对应的目录
+#7：
+useradd -s /sbin/nologin -d /var/ftproot vuser
+chmod 555 /var/ftproot centos7 需除去ftp根目录的写权限
+mkdir /var/ftproot/{upload,pub}
+setfacl –m u:vuser:rwx /var/ftproot/upload
+确保/etc/vsftpd.conf中已经启用了以下选项
+anonymous_enable=YES
+添加下面两项 [#上个实验已加]
+guest_enable=YES
+guest_username=vuser
+修改下面一项，原系统用户无法登录
+pam_service_name=vsftpd.mysql
+cd /etc/vsftpd/vusers.d/
+vim ftp1  建立pam认证所需文件
+auth required pam_mysql.so user=vsftpd passwd=magedu host=mysqlserver db=vsftpd table=users usercolumn=name passwdcolumn=password crypt=2
+account required pam_mysql.so user=vsftpd passwd=magedu host=mysqlserver db=vsftpd table=users usercolumn=name passwdcolumn=password crypt=2
+四、启动vsftpd服务
+service vsftpd start;systemctl start vsftpd
+chkconfig vsftpd on;systemctl enable vsftpd
+查看端口开启情况
+
+面试题：
+cd /data
+vim ftp.sh  创建ftp脚本，实现上传和下载
+ftp -n -i 192.168.34.7 <<!
+user ftp2 magedu
+cd upload
+mput  *.log
+get  *.txt
+bye
+!
+
+--NFS服务
+nfs 网络文件系统，linux内核级别支持
+rpc-bind[端口映射] - 111端口  服务端口侦听服务
+软件包：nfs-utils
+
+showmount -e 192.168.34.7  查看挂载点信息[目的端目录]
+
+vim  /etc/exports  存放共享文件信息
+/data/ntfs1 *(sync) 同步，数据在请求时立即写入共享
+/data/ntfs2 *(rw,no_root_squash不压榨) [则远程root访问保留权限]
+/data/ntfs2 192.168.34.6(rw,no_root_squash) 192.168.34.0/24(ro)
+34.6可读写，其他34网段用户只能读 [不安全]
+
+--主机格式：
+单个主机：ipv4，ipv6，FQDN
+IP networks：两种掩码格式均支持
+172.18.0.0/255.255.0.0
+172.18.0.0/16
+wildcards：主机名通配，例如*.magedu.com，IP不可以
+netgroups：NIS域的主机组，@group_name
+anonymous：表示使用*通配所有客户端
+
+--配置格式：
+默认选项：(ro,sync,root_squash,no_all_squash)
+ro,rw 只读和读写
+async 异步，数据变化后不立即写磁盘，性能高
+sync（1.0.0后为默认）同步，数据在请求时立即写入共享
+no_all_squash （默认）保留共享文件的UID和GID
+all_squash 所有远程用户(包括root)都变成nfsnobody
+root_squash （默认）远程root映射为nfsnobody,UID为65534，早期版本是4294967294 (nfsnobody)
+no_root_squash 远程root映射成root用户
+anonuid和anongid 指明匿名用户映射为特定用户UID和组GID，而非nfsnobody,可配合all_squash使用
+
+exportfs
+–v 查看本机所有NFS共享
+–r 重读配置文件，并共享目录
+–a 输出本机所有共享
+–au 停止本机所有共享
+
+mount -o vers=3 192.168.34.7:/data/nfsdir2 /mnt/nfs2 
+[默认4版本挂载,且默认用的nfsnobody账号访问]
+showmount 显示已挂载主机
+
+setfacl -m u:nfsnobody:rwx nfsdir2/  授权
+
+[普通用户访问挂载，将保留普通用户的uid,gid身份访问]
+
+vim /etc/fstab [可写入配置文件]
+192.168.34.7:/data/nfsdir2  /mnt/nfs2  nfs defaults 0 0
+mount -a ↑ 可刷新挂载
+
+自动挂载：
+yum install autofs
+vim /etc/auto.master  定义父目录和子配置文件对应关系
+vim /etc/auto.misc  定义详细挂载细节
+
+1）相对路径法
+客户配置实现自动挂载 [要安装autofs]
+vim /etc/auto.misc   配置子配置文件，不需重启服务
+nfs  -fstype=nfs,vers=3  192.168.34.7:/data/nfsdir2
+配置只要访问nfs目录，就实现自动挂载
+测试：cd /misc/nfs
+
+2）绝对路径法
+vim /etc/auto.master
+/-   /etc/test.auto  表示所有挂载路径全放子配置文件
+vim /etc/test.auto 
+/d1/d2/d3/nfs2   -fstype=nfs  192.168.34.7:/data/nfsdir2
+systemctl restart autofs
+mount -a  ; mount 查看挂载信息
+
+支持含通配符的目录名
+192.168.34.7:/data/nfsdir1  /misc/nfsdir1   名称相同的情况下才能用
+vim /etc/auto.misc
+*  -fstype=nfs 192.168.34.7:/data/nfsdir1
+
+实现直接挂载
+cd /misc ； cd net
+cd /net/192.168.34.7/data/nfsdir1
+
+--SAMBA服务▲
+SMB：Server Message Block服务器消息块，IBM发布，最早是DOS网络文件共享协议；实现windows和UNIX互联互通
+UNC 通能用命名规范   \\192.168.34.7\share
+
+相关包：
+Samba 提供smb服务
+Samba-client 客户端软件
+samba-common 通用软件
+cifs-utils smb客户端工具
+samba-winbind 和AD相关
+
+相关服务进程：
+smbd 提供smb（cifs）服务 TCP:139,445
+nmbd NetBIOS名称解析 UDP:137,138
+
+主配置文件：/etc/samba/smb.conf
+帮助参看：man smb.conf
+语法检查： testparm [-v] [/etc/samba/smb.conf]
+客户端工具：smbclient,mount.cifs
+
+yum install sumba -y
+systemctl start smb 启动服务[445,139]
+systemctl start nmb 启动服务[137,138udp]
+
+smbclient -L 192.168.34.7 查看远程samba工作组信息
+
+useradd -s /sbin/nologin smbuser1 创建系统账号
+useradd -s /sbin/nologin smbuser2
+smbpasswd -a smbuser1  把系统账号加入smb数据库账号，并配置口令
+[不加-a，表示更改此现有smb账号的口令]
+
+smbclient -L 列出现有smb账号
+ll /var/lib/samba/private/
+该文件passdb.tdb，存放smb账号信息，二进制数据库文件
+
+win:\\192.168.34.7\    ;   user1  centos   
+默认实现家目录/user/smbuser1/
+
+--实现win/linux 文件共享
+mkdir /data/smbshare;  cp /etc/fstab  /data/smbshare/f{1,2}
+vim /etc/samba/smb.conf
+[share]表示共享名
+path=/data/smbshare  共享路径
+systemctl restart smb 重启生效
+登录测试：
+wim: \\192.168.34.7\share
+linux: smbclient //192.168.34.7/share -U smbuser1%centos
+
+chmod 777 /data/share  文件系统权限
+vim /etc/samba/smb.conf 添加权限，重启生效
+[share]
+read only = NO  表示不只读[可写]
+write list =smbuser1 .. 表示某个文件可写[配合 read only =yes]
+public=yes  表示任何人都能访问，不用输密码
+browseable=share  可隐藏share文件夹
+hosts allow ==172.18.   允许哪个网段访问
+
+[global]
+config file=/etc/samba/conf.d/%U  用户独立的配置文件
+mkdir /data/share2 ; touch share2.txt
+mkdir /etc/samba/conf.d/
+vim smbuser2  配置smbuser2用户访问的目录
+[share]
+path=/data/share2/
+重启服务，用smbuser2登录验证
+
+[global]
+Log file=/var/log/samba/log.%m  不同客户采用不同日志
+log level=2 设置日志级别
+cat  /var/log/samba/log.*
+
+smbclient -L 192.168.34.7 -U name@passwd 可查看隐藏文件[win]
+mount -o username=smbuser1,password=centos //192.168.34.7/share /mnt  可实现linux挂载
+
+win：
+net use  查看当前连接
+net use \\192.168.34.7\share /del 删除现有连接
+net user name passwd /add 创建用户
+net user name /del   删除用户
+
+--数据实时同步▲
+实现实时同步
+要利用监控服务（inotify），监控同步数据服务器目录中信息的变化发现目录中数据产生变化，就利用rsync服务推送到备份服务器上
+实现实时同步的方法
+inotify+rsync 方式实现数据同步
+sersync ：金山公司周洋在 inotify 软件基础上进行开发的，功能更加强大
+实现inotify软件：
+inotify-tools，lrsyncd，sersync
+
+
+#主要文件：
+#inotifywait 监控文件发生的变化
+#inotifywatch  统计数据
+
+--inotifywait命令常见选项
+-m, --monitor 始终保持事件监听
+-d, --daemon 以守护进程方式执行，和-m相似，配合-o使用
+-r, --recursive 递归监控目录数据信息变化
+-q, --quiet 输出少量事件信息
+--timefmt <fmt> 指定时间输出格式
+--format <fmt> 指定的输出格式；即实际监控输出内容
+-e 指定监听指定的事件，如果省略，表示所有事件都进行监听
+--exclude <pattern> 指定排除文件或目录，使用扩展的正则表达式匹配的模式实现
+--excludei <pattern> 和exclude相似，不区分大小写
+-o, --outfile <file>打印事件到文件中，相当于标准正确输出
+-s, --syslogOutput 发送错误到syslog相当于标准错误输出
+
+--timefmt <fmt>时间格式，参考 man 3 strftime
+%Y 年份信息，包含世纪信息
+%y 年份信息，不包括世纪信息
+%m 显示月份，范围 01-12
+%d 每月的第几天，范围是 01-31
+%H 小时信息，使用 24小时制，范围 00-23
+%M 分钟，范围 00-59
+示例：
+--timefmt "%Y-%m-%d %H:%M"
+--format <fmt> 格式定义
+
+%T 输出时间格式中定义的时间格式信息，通过 --timefmt option 语法格式指定时间信息
+%w 事件出现时，监控文件或目录的名称信息
+%f 事件出现时，将显示监控目录下触发事件的文件或目录信息，否则为空
+%e 显示发生的事件信息，不同的事件默认用逗号分隔
+%Xe显示发生的事件信息，不同的事件指定用X进行分隔
+示例：
+--format "%T %w%f event: %;e"
+--format '%T %w %f'
+
+示例：
+监控一次性事件
+inotifywait /data
+持续监控
+inotifywait -mrq /data   [m保持监听；r递归；q；输出少量事件信息]
+持续后台监控，并记录日志
+inotifywait -o /root/inotify.log -drq /data --timefmt "%Y-%m-%d %H:%M" --format "%T %w%f event: %e"
+killall inotitywait 关闭后台进程
+持续后台监控特定事件
+inotifywait -mrq /data --timefmt "%F %H:%M" --format "%T %w%f event: %;e" -e create,delete,moved_to,close_write
+
+7主服务器  ； 17备份服务器
+yum install inotify-tools
+--配置 rsync 服务器端的配置文件▲
+vi /etc/rsyncd.conf  [873端口]
+uid = root  该服务指定谁的身份运行
+gid = root  
+use chroot = no
+max connections = 0 #最大连接数不限制
+ignore errors #忽略错误信息 
+exclude = lost+found/   排除细节信息
+log file = /var/log/rsyncd.log  日志文件目录
+pid file = /var/run/rsyncd.pid  pid文件
+lock file = /var/run/rsyncd.lock  锁文件
+reverse lookup = no   反向名字解析服务
+hosts allow = 192.168.8.0/24  允许那个网段访问
+[backup]   发布的文件夹名
+path = /backup/    同步文件夹目录
+comment = backup   
+read only = no  可写
+auth users = rsyncuser  指定用户账号
+secrets file = /etc/rsync.pass  口令文件
+
+服务器端生成验证文件
+echo "rsyncuser:magedu" > /etc/rsync.pass 用户名+密码
+chmod 600 /etc/rsync.pass
+服务器端准备目录
+mkdir /backup
+服务器端启动rsync服务
+rsync --daemon  可加入/etc/rc.d/rc.local实现开机启动[后台执行]
+客户端配置密码文件
+echo "magedu" > /etc/rsync.pass
+chmod 600 /etc/rsync.pass
+客户端测试同步数据
+rsync -avz --password-file=/etc/rsync.pass /data/ rsyncuser@192.168.34.17::backup
+
+watch -n1 1s -l /backup   1秒钟监控一次 
+
+--------------------------------------------------------------------------I
+第三十八节课 2018年12月20日  周四
+--------------------------------------------------------------------------I
+发布-变更-排除 #调优
+netfilter的架构就是在整个网络流程的若干位置放置了一些检测点（HOOK），而在每个检测点上登记了一些处理函数进行处理。
+
+【Linux防火墙】
+端口：进程地址
+systemclt stop firewalld   关闭防火墙
+systemctl disable firewalld  关闭开机自启
+systemctl is-enabled firewalld 查看防火墙状态
+
+
+●报文流向：
+到本地内部：prerouting路由前--input
+由本机发出：output--postrouting路由后
+转发：prerouting路由前--forward转发--postrouting路由后
+[过滤hock不支持在prirouting]
+
+●iptables 四个功能：
+fileter 过滤  
+nat 地址转换
+mangle报文修改，fwmark 
+raw关闭连接追踪  [自动在实现nat时，打开连接追踪机制]
+优先次序 raw->mangle->nat->filter
+
+Centos :
+netfilter ： 内核级框架功能 framework
+↑syscall ：通过ipdtables 命令行工具，管理防火墙规则
+firewall-cmd:通过该程序间接管理syscall，不推荐
+firewalld.service [默认] 
+iptables.service [需要安装] yum install iptables.service
+ 
+
+规则管理：
+● firewalld.service  定义的规则不能被firewalld识别，不兼容
+● iptables.service,
+iptables-save > /tpm/iptables-rules.v0.1 保存规则文件
+iptables-restore < /tpm/iptables-rules.v0.1  导入规则文件
+yum install iptables-services -y
+/user/libexec/iptables/iptables.init  restart|repoad  重启服务
+/etc/sysconfig/iptables  
+开启服务自动保存规则，开机启服务自动载入
+
+● 规则 : [hock，要用大写]
+filter：INPUT,FORWARD,OUTPUT
+nat：PREROUTING,INPUT,OUTPUT
+mangle：PREOUTING,INOUT,OUTPUT,PRETOUTING,FORWARD
+raw：PREROUTING,OUTPUT
+[ 表和钩子对应关系]
+
+● 精确匹配，把承载服务请求频繁的放前面，访问量较小的放后面
+大部分情况下规则越少越好， 自定义链有调用删除不了，可以清空
+
+
+● 命令使用格式：
+iptables [-t 表]  SUBCDM子命令  chain链规则操作 [num | rule-spec]
+rule --> matches 检查条件/规范   target 处理动作
+
+● 管理规则：[filter/nat/mangle/raw] CRUD：增删改查
+   -A：追加 append
+   -I  ：插入 insert
+   -D ：删除 delete
+   -R  ：替换  replace
+● 管理链：
+   -N： 新增链
+   -X： 删除一条(自定义，空的，引用计数为0的链)
+   -E ：改名-->引用计数为0的自定义链
+   -P ：设置链的默认策略
+   -F ：flush，清空规则
+   -Z ：zero，计数器置零
+[ iptables的每条规则和每个链都有专用的两个计数器，pkgs/bytes ] 
+● 链
+   ○ 内置链
+   ○ 自定义链
+● 匹配条件
+  ○ 检查报文
+	■ TCP或UDP首部
+	■ IP首部：SIP,DIP
+	■ MAC首部
+   ○ 匹配条件
+	■ 通用匹配
+	     -s，sip，报文源地址，其值可以是ip或网络地址
+	     -d，dip，报文目的地址
+	     -i ，--in，interface
+	     -o，--out，interface
+	     -p，protocol：四层协议，tcp/udp/icmp
+	■ 扩展匹配
+	     隐式扩展 ：不用指明，就知其意 
+	     显示扩展 ：必须指明，用哪些扩展模块进行扩展 [-m]
+● 查看：-L
+   ○ -n：以数字显示主机地址和端口
+   ○ -v：详细信息 -vv，-vvv
+   ○ -x：exact，精准数据
+   ○ --line-numbers：行号/规则号
+例：
+iptables -t filter -vnL --line-numbers 
+iptables -f filter -A INPUT -s 172.18.0.200 -d 172.18.0.66 -p tcp 
+--dport 80 -j REJECT
+
+● 处理动作， target目标  -j 
+   ○ DROP：丢弃 [访问有超时等待，消耗资源]
+   ○ REJECT：拒绝 [访问立即弹回]
+   ○ ACCEP：接受
+   ○ RETURN：返回
+   ○ REDIRECT 重定向
+   ○ SNAT 源地址转换
+   ○ DNAT 目标地址转换
+   ○ MASQUREADE 地址伪装
+   ○ LOG
+   ○ 自定义链
+
+回顾
+iptables规则生成器（防火墙） -> 放置在 netfilter  
+netfilter:hooks
+iptables:chains 内置链↓
+  ●  PREROUTING  流入接口
+	○ 入栈：INPUT
+	○ 转发：FORWARD  
+  ●   OUTPUT，FORWARD 流出接口
+	○ POSTROUTING
+iptables功能，-t table 
+  ● filter  默认表
+  ● nat  地址转换
+  ● mangle 报文修改/操作
+  ● raw 关闭连接追踪  [自动在实现nat时，打开连接追踪机制]
+
+iptables命令：
+命令：
+规则：-A增，-I插，-D删，-R替
+链：-N新增，-X删除，-E改名，-P默认策略，-Z置零，-F清空
+查看：-L查，-n数字，-v信息，-x精准，--line-numbers行号
+
+matches：'与'逻辑
+通用匹配 【每个都能取反】
+-s源，-d目的，-p协议，-i输入，-o输出
+扩展匹配：-m string字符串/time时间/multiport多端口
+● 隐式扩展：
+   ○ -p tcp / udp / icmp
+● 显式扩展：
+[必须使用-m指明要调用的扩展模块的扩展机制，要手动加载扩展模块]
+1）multiport扩展： 
+iptables -I INPUT -p tcp -m multiport --dports 21:22,80,139,445 -j ACCEPT 多端口匹配
+iptables -I INPUT 1 -p tcp  -m multiport --sports 21,22,80,139,445 -j ACCEPT 多端口匹配 [不能超过15个选项]
+2）iprange扩展：
+iptables -I INPUT 4 -P icmp --icmp-type 8 --src-range 172.18.0.60-172.18.0.70 -j ACCEPT 
+允许请求ICMP协议报文，允许的范围60-70
+iptables -I OUTPUT 4 -p icmp --icmp-type 0 --dst-range 172.18.0.60-172.18.070 -j ACCEPT
+允许响应ICMP协议报文，允许的范围60-70
+3）set网络层扩展 [依赖于ipset命令行工具]  定义集合，匹配集合
+yum install ipset
+ipset create allowpinghosts hash:ip  创建集合类型
+ipset add allowpinghosts 172.18.0.100  添加元素
+ipset add allowpinghosts 172.18.0.200
+ipset list 查看定义集合
+iptables -I INPUT 4 -p icmp --icmp-type 8 -m set --match-set allowpinghosts src -j ACCEPT  允许定义集合内的icmp请求
+iptables -I OUTPUT 4 -p icmp --icmp-type 0 -m set --match-set
+allowpinghosts dst -j ACCEPT 允许定义集合内的icmp回应
+set存在类型，常用的有两个 
+hash：net网络地址的集合
+hash：ip  IP地址的集合
+4）string应用层扩展 [对报文中的应用层数据做字符串模式匹配检测]
+--string xx 检查字符串  --hex-string xx   检查字符串，16进制格式
+--algo 匹配检测算法 --from offset 开始偏移 --to offset 结束偏移
+iptables -I INPUT -m string --string  "sex" --algo bm -j REJECT
+iptables -I OUTPUT -m string --string "sex" --algo bm -j REJECT
+定义规则，拒绝sex字符串通过网页输入/输出
+echo this is test page
+sex
+third line.   > /var/www/test1.html
+curl 192.168.34.17/test1.thml,当检测到字符串，默认拒绝访问页面
+5）time扩展  [根据报文时间进行匹配度检测]
+--timestart hh:mm  --timestop  hh:mm
+--monthdays day[...]   --weekdays day[,day...]
+iptables -R INPUT 5 -p icmp --icmp-type 8 -m set --match-set allowpinghosts src -m time --timestart 08:00:00 --timestop 18:00:00
+--weekdays Tue,Thu,Sat --kerneltz  -j ACCEPT 
+只允许指定ip集在周2/4/6的早8点到晚6点发起ping请求，用内核时区定义
+6）connlimit扩展  [控制每客户端IP并发连接数]
+--connlimit-upto#：连接的数量小于等于#时匹配
+--connlimit-above #：连接的数量大于#时匹配
+iptables -I INPUT 2 -p tcp --dport 22 -m connlimit --connlimit-above 2  -j REJECT   
+每客户ssh连接请求大于2时，多余的拒接访问
+7）limit扩展  [报文传输速率限制]  令牌桶过滤器
+--limit #[/second|/minute|/hour|/day]   平均速率
+--limit-burst number  突发速率
+iptables-I INPUT 5 -p icmp --icmp-type 8 -m set --match-set allowpinghosts src -m limit --limit 20/minute --limit-burst 5 -j ACCEPT
+ipset add allowpinghost 172.18.0.67 添加参数->ip集
+iptables -A INPUT -j REJECT
+允许响应icmp协议，引用ip集，并限制每分钟20个令牌，突发速率5个
+8）state扩展
+根据”连接追踪机制“去检查连接的状态，较耗资源
+只要状态为ESTABLISHED通通放行，反之为无状态
+#当前收到的连接于此前连接没有任何相关性，每个连接都是被单独对待和处理就是无状态连接
+#NEW-ESTABLISHED-RELATED-INVALID-UNTRACKED-SNAT-DNAT表
+iptables -A INPUT -m state --state ESTABLISHED -j ACCEPT
+iptables -A OUTPUT -m state --state ESTABLISHED -j ACCEPT
+只要是之前建立过的连接都允许访问
+iptables -A INPUT -p tcp -m multiport --dports 21,22,80,139,445 -m
+state --state NEW -j ACCEPT
+允许新建连接访问特定端口
+iptables -A INPUT ! -i lo -j ERJECT     非连接lo网卡的请求都拒绝
+iptables -A OUTPUT ! -o lo -j ERJECT   
+modprobe nf_conntrack_ftp 加载关联模块 ↑依赖模块▲
+iptables -A INPUT -3 -p tcp -m state --state RELATED -j ACCEPT
+允许所有已关联过的tcp连接，可通过任何端口进行访问
+
+--加载RELATED模块
+方法1：
+systemctl  status iptables 必须先启用服务
+vim /etc/sysconfig/iptables-config 配置模块开机自启
+IPTABLES_MODULES="nf_conftrack_max.conf"
+方法2：
+vim /etc/sysconfig/modules/nf_conntra.modules 配置脚本
+#!/bin/bash
+/sbini/modprobe nf_conntrank.modules
+chmod +x  /etc/sysconfig/modules/nf_conntra.modules
+
+lsmod | grep conntrack  查看验证模块
+vim /etc/sysctl.d/nf_conftrack_max.conf 新建文件，并写入配置
+echo net.nf_conntrack_max=1000000 保存到配置文件永久生效
+sysctl -p /etc/sysctl.d/nf_conftrack_max.conf 重读配置文件
+
+已经追踪到的并记录下来的连接信息库
+/proc/net/nf_conntrack
+调整连接追踪功能所能够容纳的最大连接数量，过载会超时被拒绝
+/proc/sys/net/nf_conntrack_max     默认65536
+不同的协议的连接追踪时长
+/proc/sys/net/netfilter/
+
+
+例：
+iptables -F 清空所有规则
+iptables -F input 清空input链
+iptables -vnL 查看规则
+iptables -D INPUT 5 删除第5条规则
+iptables -N web_rules 新增自定义规则链
+iptables -E web_rules cifs_rules 修改链名称[只能修改0引用的自定义链] 
+
+▲隐士扩展：↓↓↓
+iptables -A FORWARD -j REJIECT 拒接所有转发规则
+iptables -t filter -I INPUT -i ens33  -p tcp --dport 80 -j ACCEPT
+iptables -t filter -I OUTPUT -o ens33  -p tcp --sport 80 -j ACCEPT
+定义INPUT规则，只允许访问本地tcp80端口 
+iptables -R INPUT 3 ！ -i lo -j REJECT
+iptables -R OUTPUT 3 ! -o lo -j REJECT
+修改第3条规则，非lo接口的网卡都拒接
+iptables -I OUTPUT 3 -p --icmp-type 8 -j ACCEPT [request]
+iptables -I INPUT 3 -p --icmp-type 0 -j ACCEPT [reply]
+允许icmp协议发送和请求
+iptables -I OUTPUT -p udp --dport 53 -j ACCEPT
+iptables -I INPUT -P udp --sport 53 -j ACCEPT
+允许本机访问和接受DNS服务
+systemctl  start smb [TCP 445 139]
+systemctl  start nmb [UDP 137 138]名称解析，win/linux混合才开启
+iptables -A cifs_fules -p tcp --dport 139 -j ACCEPT
+iptables -A cifs_fules -p tcp --dport 445 -j ACCEPT
+iptables -A cifs_rules -p dup --dport 137:138 -j ACCEPT
+给cifs_rules自定义链添加规则，放行samba相关端口
+iptables -A sifs_fules -j RETURN 如果以上匹配不到,则回到主链[默认]↑
+iptables -I input 5 -s 172.18.0.0/16 -j cifs_rules  
+匹配到的规则放到cifs规则做检测
+iptables -D INPUT 5 删除引用规则
+iptables  p-F cifs_rules 清除规则
+iptables -X xifs_rules 删除规则
+
+作业：
+主机部署httpd、samba、dns、mariadb、vsftpd
+要求默认策略为拒绝
+配置iptables规则：
+#dns，httpd：ALL
+iptables -I INPUT -p tcp -m mutiport -dports 53,80 -j ACCEPT
+
+#nfs，samba，vsftpd：LOCALNET
+iptables -I INPUT -p tcp -m multiport --dports 20:21,2049,111,139,445 -m iprange --src-range 172.16.0.0-172.31.255.255  -j ACCEPT
+iptables -I INPUT -p udp -m multiport --dports 137:138 -m iprange --src-range 172.16.0.0-172.31.255.255  -j ACCEPT
+iptables -I INPUT -p tcp  -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -I INPUT -p udp  -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+#myslq：lOCALHOST
+iptables -I INPUT -i lo -p tcp --dport 3306 -j ACCEPT
+
+#ping：ALL，10/minute
+iptables -A INPUT -p icmp --icmp-type 8 -m limit --limit 10/min -j ACCEPT
+
+#ssh：3conns/IP，worktime 每周五：8:00--18:00
+iptables -A INPUT -p tcp --dport 22 -m connlimit --connlimit-upto 3 -m time --timestart 8:00 --timestop 23:59 --weekdays 1,2,3,4,5 --kerneltz -j ACCEPT  
+iptables -P INPUT DROP
+iptables -A OUTPUT -p tcp --sport 22 -j ACCEPT
+iptables -P OUTPUT DROP
+iptables -A OUTPUT -m state --state ESTABLISHED -j ACCEPT
+
+--------------------------------------------------------------------------I
+第三十九节课 2018年12月22日  周六
+--------------------------------------------------------------------------I
+当前收到的连接于此前连接没有任何相关性，每个连接都是被单独对待和处理就是无状态连接
+
+node 01 [172.18.0.67 ]▲
+#echo > 1 /proc/sys/net/ipv4/ip_forward 启用路由转发
+#sysctl -w net.ipv4.ip_forward=1  启用路由转发 
+
+node 02 [ 172.18.0.66   192.168.10.10 ]▲
+#route add -net 192.168.10.0/24 gw 172.18.0.66 添加路由
+iptables -A FORWARD -s 172.18.0.0/16 -p tcp --dport 80 -j ACCEPT
+iptables -A FORWARD -j REJECT
+iptables -I FORWARD 2 -d 172.18.0.0/16 -p tcp --sport 80 -j ACCEPT
+iptables -I FORWRD -m state --state ESTABLISHED -j ACCEPT
+iptables -D FORWARD 3 
+iptables -R FORWARD 2 -s 172.18.0.0/16 -p tcp --dport 80 -m state --state NEW -j ACCEPT
+放行所有内网访问外网80端口的新建连接
+iptables -R FORWARD 2 -s 172.18.0.0/16 -p tcp -m multiport --dports 80,21,53 -m state --state NEW -j ACCEPT
+放行内网多个端口访问外网的新建连接
+iptables -I FORWARD 3 -s 172.18.0.0/16 -p udp --dport 53 -m state --state NEW -j ACCEPT  接受53端口的相应请求
+modprobe nf_conntrack_ftp ↓ 加载模块
+iptables -I FORWARD 4 -s 172.18.0.0/16 -p tcp -m --state RELATED -j ACCEPT  放行内网所有已建立连接的端口
+###SNAT/DNAT
+SNAT 通常只发生在POSTROUTING链上
+DNAT 通常只发生在PREROUTING链上
+MASQUERADE  只能发生在POSTROUING链上[会消耗等多计算资源]
+REDIRECT：重定向，通常可用在PREROURING和INPUT上
+FULL-NAT:源地址和目的地址在nat分别发生改变，使其均通过内网地址通信，当通信返回到NAT时，再根据连接追踪功能返回真实的源/目的IP
+
+iptables -t nat -A POSTROUTING  -s 172.18.0.0/16 ! 172.18.0.0/16 -j SNAT --to-source 192.168.10.10  
+把172.18地址范围经过10.10出去的时候做nat转换
+iptables -A FORWARD -j REJECT
+iptables -I FORWARD -s 172.18.0.0/16 -p icmp -m limit --limt-burst 5 --limit 20/minute -j ACCEPT
+限制172.18网段的icmp访问速率
+iptables -I FORWARD -m state --state ESTABLISHED -j ACCEPT
+iptables -R FORWARD 2 -s 172.18.0.0/16  -p icmp -m state --state NEW -j ACCEPT
+iptables -I FORWARD 2 -s 172.18.0.0/16 -p tcp --dport 80 -m state NEW -j ACCEPT 
+
+iptables -t nat -A PREROUTING -d 172.18.0.66 -p tcp --dport 80 -j DNAT --to-destination 192.168.10.7
+地址转换
+iptables -t nat -R PREROUTING -d 172.18.0.66 -p tcp --dport 80 -j DNAT --to-destination 192.168.10.7:8080
+地址+端口转换
+iptable -t nat -F 清空nat表
+iptables -t nat -A POSTROUTING -s 172.18.0.0/16 ! d 172.18.0.0/16 -j
+MASQUERADE  地址伪装，会自动转换一个合适源地址
+
+
+node03 [192.168.10.7]▲
+#route add default gw 192.168.10.2  删除路由条目
+#route del -net 0.0.0.0 删除默认路由
+#route add default gw 192.168.10.10 添加路由
+开启httpd和vsftpd服务
+
+iptables -t nat -A PREROUING -d 192.168.10.7 -p tcp --dport 80 -j REDIRECT --to-port 8080
+服务端做端口重定向
+
+规则优化：
+1、可安全放行所有入站及出站，且状态为ESTABLISHED连接；
+2、服务于同一类功能的规则，匹配条件严格的放前面，宽松放后面；
+3、服务于不同类功能的规则，匹配报文可能性较大放前面，较小放后面；
+4、设置默认策略：默认策略设定。
+
+【KVM】
+程序：指令+数据
+程序=算法+数据结构
+过程式编程：以算法为中心，数据服务于算法
+面向对象编程：以数据为中心，算法服务于数据
+
+虚拟内存：线性地址4G； 由内核映射对应关系--> 物理地址1G，让多程序并行
+时序复用：如每5ms一个单位(片)，有内核去切，然后在多个程序之间进行时间分配和切换
+空间复用：把物理空间分割成页框，通常4k/框，每个大小按需分配；把一段存储空间按空间大小进行切割后分配
+
+--假设4G内存可用
+win:每个系统2G，程序2G
+linux:每个程序4G，留1G给内核
+
+进程元数据：描述一个实体的属性信息
+MMU：内存管理单位
+3级缓存：协调内存和cpu之间的访问
+TLB：转换后援缓冲器，加速MMU的转换效果
+
+存储：文件系统复用 
+网卡：时序复用 ，通过内置RAM队列发送和缓存不同数据
+I/O through盘：3-5%性能损耗，直接给虚拟化用(不常用)
+X86：环行指令而设计，当执行特权操作，模式切换，调用内核代码
+把线性地址转换成物理地址，每次转换都有MMU
+TLB：进程和物理之间的转换管理
+cpu指令：普通指令集，特权指令集，x86用环标志，自内而外0/1/2/3
+环3:普通指令；2/1 未使用；0指令
+
+--安全虚拟化  full-virt  30-40%利用率 硬件辅助，靠环-1 ，
+● 正常情况：用户空间进程系统调用-->发给虚拟内核-->发给虚拟CPU-->对真内核调用-->再发给真cpu  [情况极具下降]
+● BT：二进制转换，能够尽可能减少损耗，性能大幅提升↑
+● vmware：-1/0/1/2/3  特权指令从0移向-1，虚机启动后，占据环-1，所有虚机占据环0，当所有虚机环0调用都会触发宿主机介入
+--半虚拟化  para-virt   90%利用率
+改造虚拟内核，配置虚拟机监视器，不用封装直接把指令发送给内核
+--模拟
+存软件模拟[emulation]，把环0/3都隐藏
+--I/O 透传 3-5%损耗
+虚拟机直接调用真实硬盘[不推荐使用，迁移不方便]
+硬盘虚拟化：把一个文件当磁盘来用，存软件方式模拟控制器
+内部虚拟机复用：纯软件方式模拟网卡，通过虚拟交换机实现通信
+AMD- NPT/inter-EPT
+
+--Linux Kernel：
+● nameSpace 
+● net 内核级支持；Mount  一个内核虚拟多个根；PID systemd；UTS一个内核可配置多个主机名称； IPC 进程间通信机制 ；User
+
+
+--netns  网络名称空间
+ip netns ls 查看当前名称
+ip netns exec router1 ifconfig lo 127.0.0.1/8 up
+可以用网络命名空间当路由器使用
+echo 1 > /proc/sys/net/ipv4/ip-froward
+ip netns exec router1 cat /proc/sys/net/ipv4/ip_forward
+宿主机路由转发和虚机的路由转发互相不干扰，类似独立TCP/IP协议栈
+
+brctl 管理内核软交换机  -h查看名称 show 查看当前交换机
+brctl addbr br0  添加软交换机
+brctl show 查看软件交换机
+brctl -addif  br0 veth1.1  把一个虚拟网卡添加到br0虚拟交换机
+
+ip link l 查看网卡 ; ip link help
+brctl addif br0 veth1.1 把1.1接口添加到虚拟交换机
+ip netns exec route1 ifconfig -a  查看虚拟路由的相关网卡
+ifconfig veth1.1 10.0.0.2/24 up  宿主机添加虚拟网卡地址并 激活
+brctl delif br0 veth1.1 拆除网卡
+brctl addif br0 veth1.1 添加网卡
+ifconfig br0 up 激活交换机 
+ip netns exec router1 ifconfig lo 127.0.0.1/8 up 启用虚拟路由网卡
+ip netns exec router1 ifconfig 查看虚拟网卡
+ip netns exec router2 ifconfig -a 查看rouer2的网卡接口
+ip netns exec router2 ip link set veth1.1 name eth0 在R2上命名网卡
+ip netns exec router2 ifconfig eth0 10.0.0.3/24 添加ip
+
+实验：配置两个虚拟路由并添加IP，使其互联互通▲
+ip  link add veth1.1 type veth peer name veth1.2 生成虚拟网卡[成对]
+ip netns add router1 添加虚拟路由
+ip netns add router2 
+ip link set veth1.1 netns router1 添加虚拟接口到router1
+ip link set veth1.2 netns router2 
+ip netns exec router1 ip link set veth1.2 name eth0 改名
+ip netns exec router2 ip link set veth1.1 name eth0 
+ip netns exec router2 ifconfig eth0 10.0.0.2/24 up 添加接口IP
+ip netns exec router1 ifconfig eth0 10.0.0.1/24 up 
+ip netns exec router1 ifconfig 查看路由接口
+ip netns exec router2 ping 10.0.0.1  连通验证
+
+仅主机模式：把网卡当虚拟交换机，虚机内在同一网段可彼此通信，且虚拟交换机也是宿主机的网卡
+NAT模式：在宿主机上打开转发，只要出去的地址，就做nat转发，实际用的宿主机地址访问网络
+网桥模式：把网卡当交换机，模拟出物理网桥，使虚机模拟成独立主机
+叠加/隧道：用一个网络承载另外一个网络传输数据
+
+zebra 开源软件，运行在linux，可模拟路由器高级协议 
+
+主机级虚拟化：自己装虚拟机，虚拟机系统，cpu模拟/完全/半虚拟化
+磁盘虚拟化：模拟/全/半虚拟化，透传
+网卡：模拟，半虚拟化，透传
+虚拟化网络：专用软件，软交换机和软路由器构建 
+openVSwitch，OpenFlow  把数据层面跟控制层面分离，构建SDN
+网络功能虚拟化
+
+主机级虚拟化：(IaaS)
+● 软件 Xen[开源领域默认虚拟化软件]，kvm，vmware workstations，vmware server，vmware ESX，virtualbox，hypelV....
+● 二型虚拟化/一型虚拟化  
+区别：二型只单独管理虚机软件，一型含一型外，还要驱动硬件
+二型=虚拟机管理软件<--虚拟化内核<--宿主机
+一型=虚拟机管理软件<--宿主机
+
+容器级虚拟化 container （PaaS）  [用户空间级虚拟化]
+#kvm模块安装后，把内核空间虚拟化，然后在一个内核上创建多个用户空间，每一个独立用户空间就像一个虚拟机，性能接近宿主机，更加轻量化
+● docker compose，swarm，machine  容器管理器
+● kubernetes --> OpenShift：K8S上打包的管理平台，二次发型版
+● Mesos，Marathon 
+
+
+云计算系统即服务  CloudOS  (Saas)
+openstack；cloudstack
+统一调度资源，统一管理虚拟机 
+CaaS，FWaaS，LBaaS，DBaaS
+统一管理虚拟机，调度资源
+
+kvm：kernel-based Virtual Machine 基于内核的虚拟机
+1) X86_64  支持X86_64架构
+2) HVM: Inter VT  ; AMD-v  支持基于硬件辅助虚拟化，做安全虚拟化
+
+qemu：1M大小，能完整充当虚拟机，可模拟多种CPU，性能表现不好
+让kvm当qemu的加速器，实现基础平台，适合当前端用户空间管理工具
+
+内核空间的内核模块 2 qemu-kvm ； qemu-img管理磁盘镜像
+用户空间的管理工具 1 kvm-amd.ko ； kvm-int.ko
+
+libvirt：用于管理虚拟化平台的开源的API，后台程序和管理工具。它可以用于管理KVM、Xen、VMware ESX，QEMU和其他虚拟化技术，C/S管理接口，提供API，可远程管理；libvirtd 守护进程
+
+virt-manager  虚拟机管理软件，可创建虚拟机并保存
+virt-viewer：运行并查看虚拟机
+virtinst : 安装虚拟机，也可以用图形化工具xml配置文件实现
+virsh ：全生命周期命令行管理工具，实现虚机的增删改查等高级操作
+
+
+--安装kvm ▲虚拟机里安装虚拟机（嵌套）:
+34.27：
+#开虚机前先启用虚拟化引擎
+grep -i -E '(vmx|svm|lm)' /proc/cpuinfo 判断CPU是否支持硬件虚拟化
+#vmx：Inter VT-x  表示支持硬件虚拟化  
+#svm：AMD AMD-v
+#lm->long mode ->64位cpu 
+modprobe kvm 安装模块
+lsmod | grep kvm 或 ls /dev/kvm  验证模块 ↑
+#qemu-kvm [ 默认会把这个软件的命令行放在非path变量搜索到的位置]
+#使用virt-manager管理kvm  ↓
+yum install qemu-kvm libvirt-daemon-kvm [守护进程工具]
+ libvirt virt-manager [图形化管理工具] -y
+yum install gnome/KDE  图形化工具安装
+yum groupinstall "GNOME desktop" ↑ [优先安装图形界面]
+##node2   34.17
+cp ifcfg-ens32 ifcfg-br0 创建物理桥接接口，ens32交换机，br0当网卡
+vim ifcfg-ens32 删除IP uuid 掩码 网关 dns，添加BRIDGE=br0
+vim ifcfg-br0  修改DEVICE=br0，NAME=br0，TYPE=Bridge，
+并删除uuid，重启网络服务
+systemctl start libvirtd.service  启动守护进程[确保系统支持图形库]
+ 启动虚拟库↑ kvm依赖
+virt-manager  开启图形化安装界面
+#生成虚拟机--网络引导--linux类型-版本centos7.0--内存1024-2颗
+--启用存储20G--名称cengos7-选择网络桥接br0/ens33（安装前自定义配置）-virtIO 半虚拟化-开始安装-7.5mini安装
+
+
+--172.18.0.1下载cirros-no_cloud-0.3.0-i386-disk.img镜像
+mget cirros-no_cloud-0.3.0-i386-disk.img
+mv cirros-no_cloud-0.3.0-i386-disk.img  /VMS
+mkdir vm{1,2,3}
+cp cirros-no_cloud-0.3.0-i386-disk.img vm1/vm1.img
+systemctl start libvirtd
+yum install  libvirtd-daemon-kvm
+yum install  virt-manager
+virt-maneger  打开kvm 的图形界面，生成虚拟机
