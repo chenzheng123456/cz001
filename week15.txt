@@ -1,0 +1,279 @@
+第三十九节课 2018年12月22日  周六
+--------------------------------------------------------------------------I
+当前收到的连接于此前连接没有任何相关性，每个连接都是被单独对待和处理就是无状态连接
+
+node 01 [172.18.0.67 ]▲
+#echo > 1 /proc/sys/net/ipv4/ip_forward 启用路由转发
+#sysctl -w net.ipv4.ip_forward=1  启用路由转发 
+
+node 02 [ 172.18.0.66   192.168.10.10 ]▲
+#route add -net 192.168.10.0/24 gw 172.18.0.66 添加路由
+iptables -A FORWARD -s 172.18.0.0/16 -p tcp --dport 80 -j ACCEPT
+iptables -A FORWARD -j REJECT
+iptables -I FORWARD 2 -d 172.18.0.0/16 -p tcp --sport 80 -j ACCEPT
+iptables -I FORWRD -m state --state ESTABLISHED -j ACCEPT
+iptables -D FORWARD 3 
+iptables -R FORWARD 2 -s 172.18.0.0/16 -p tcp --dport 80 -m state --state NEW -j ACCEPT
+放行所有内网访问外网80端口的新建连接
+iptables -R FORWARD 2 -s 172.18.0.0/16 -p tcp -m multiport --dports 80,21,53 -m state --state NEW -j ACCEPT
+放行内网多个端口访问外网的新建连接
+iptables -I FORWARD 3 -s 172.18.0.0/16 -p udp --dport 53 -m state --state NEW -j ACCEPT  接受53端口的相应请求
+modprobe nf_conntrack_ftp ↓ 加载模块
+iptables -I FORWARD 4 -s 172.18.0.0/16 -p tcp -m --state RELATED -j ACCEPT  放行内网所有已建立连接的端口
+###SNAT/DNAT
+SNAT 通常只发生在POSTROUTING链上
+DNAT 通常只发生在PREROUTING链上
+MASQUERADE  只能发生在POSTROUING链上[会消耗等多计算资源]
+REDIRECT：重定向，通常可用在PREROURING和INPUT上
+FULL-NAT:源地址和目的地址在nat分别发生改变，使其均通过内网地址通信，当通信返回到NAT时，再根据连接追踪功能返回真实的源/目的IP
+
+iptables -t nat -A POSTROUTING  -s 172.18.0.0/16 ! 172.18.0.0/16 -j SNAT --to-source 192.168.10.10  
+把172.18地址范围经过10.10出去的时候做nat转换
+iptables -A FORWARD -j REJECT
+iptables -I FORWARD -s 172.18.0.0/16 -p icmp -m limit --limt-burst 5 --limit 20/minute -j ACCEPT
+限制172.18网段的icmp访问速率
+iptables -I FORWARD -m state --state ESTABLISHED -j ACCEPT
+iptables -R FORWARD 2 -s 172.18.0.0/16  -p icmp -m state --state NEW -j ACCEPT
+iptables -I FORWARD 2 -s 172.18.0.0/16 -p tcp --dport 80 -m state NEW -j ACCEPT 
+
+iptables -t nat -A PREROUTING -d 172.18.0.66 -p tcp --dport 80 -j DNAT --to-destination 192.168.10.7
+地址转换
+iptables -t nat -R PREROUTING -d 172.18.0.66 -p tcp --dport 80 -j DNAT --to-destination 192.168.10.7:8080
+地址+端口转换
+iptable -t nat -F 清空nat表
+iptables -t nat -A POSTROUTING -s 172.18.0.0/16 ! d 172.18.0.0/16 -j
+MASQUERADE  地址伪装，会自动转换一个合适源地址
+
+
+node03 [192.168.10.7]▲
+#route add default gw 192.168.10.2  删除路由条目
+#route del -net 0.0.0.0 删除默认路由
+#route add default gw 192.168.10.10 添加路由
+开启httpd和vsftpd服务
+
+iptables -t nat -A PREROUING -d 192.168.10.7 -p tcp --dport 80 -j REDIRECT --to-port 8080
+服务端做端口重定向
+
+规则优化：
+1、可安全放行所有入站及出站，且状态为ESTABLISHED连接；
+2、服务于同一类功能的规则，匹配条件严格的放前面，宽松放后面；
+3、服务于不同类功能的规则，匹配报文可能性较大放前面，较小放后面；
+4、设置默认策略：默认策略设定。
+
+【KVM】
+程序：指令+数据
+程序=算法+数据结构
+过程式编程：以算法为中心，数据服务于算法
+面向对象编程：以数据为中心，算法服务于数据
+
+虚拟内存：线性地址4G； 由内核映射对应关系--> 物理地址1G，让多程序并行
+时序复用：如每5ms一个单位(片)，有内核去切，然后在多个程序之间进行时间分配和切换
+空间复用：把物理空间分割成页框，通常4k/框，每个大小按需分配；把一段存储空间按空间大小进行切割后分配
+
+--假设4G内存可用
+win:每个系统2G，程序2G
+linux:每个程序4G，留1G给内核
+
+进程元数据：描述一个实体的属性信息
+MMU：内存管理单位
+3级缓存：协调内存和cpu之间的访问
+TLB：转换后援缓冲器，加速MMU的转换效果
+
+存储：文件系统复用 
+网卡：时序复用 ，通过内置RAM队列发送和缓存不同数据
+I/O through盘：3-5%性能损耗，直接给虚拟化用(不常用)
+X86：环行指令而设计，当执行特权操作，模式切换，调用内核代码
+把线性地址转换成物理地址，每次转换都有MMU
+TLB：进程和物理之间的转换管理
+cpu指令：普通指令集，特权指令集，x86用环标志，自内而外0/1/2/3
+环3:普通指令；2/1 未使用；0指令
+
+--安全虚拟化  full-virt  30-40%利用率 硬件辅助，靠环-1 ，
+● 正常情况：用户空间进程系统调用-->发给虚拟内核-->发给虚拟CPU-->对真内核调用-->再发给真cpu  [情况极具下降]
+● BT：二进制转换，能够尽可能减少损耗，性能大幅提升↑
+● vmware：-1/0/1/2/3  特权指令从0移向-1，虚机启动后，占据环-1，所有虚机占据环0，当所有虚机环0调用都会触发宿主机介入
+--半虚拟化  para-virt   90%利用率
+改造虚拟内核，配置虚拟机监视器，不用封装直接把指令发送给内核
+--模拟
+存软件模拟[emulation]，把环0/3都隐藏
+--I/O 透传 3-5%损耗
+虚拟机直接调用真实硬盘[不推荐使用，迁移不方便]
+硬盘虚拟化：把一个文件当磁盘来用，存软件方式模拟控制器
+内部虚拟机复用：纯软件方式模拟网卡，通过虚拟交换机实现通信
+AMD- NPT/inter-EPT
+
+--Linux Kernel：
+● nameSpace 
+● net 内核级支持；Mount  一个内核虚拟多个根；PID systemd；UTS一个内核可配置多个主机名称； IPC 进程间通信机制 ；User
+
+
+--netns  网络名称空间
+ip netns ls 查看当前名称
+ip netns exec router1 ifconfig lo 127.0.0.1/8 up
+可以用网络命名空间当路由器使用
+echo 1 > /proc/sys/net/ipv4/ip-froward
+ip netns exec router1 cat /proc/sys/net/ipv4/ip_forward
+宿主机路由转发和虚机的路由转发互相不干扰，类似独立TCP/IP协议栈
+
+brctl 管理内核软交换机  -h查看名称 show 查看当前交换机
+brctl addbr br0  添加软交换机
+brctl show 查看软件交换机
+brctl -addif  br0 veth1.1  把一个虚拟网卡添加到br0虚拟交换机
+
+ip link l 查看网卡 ; ip link help
+brctl addif br0 veth1.1 把1.1接口添加到虚拟交换机
+ip netns exec route1 ifconfig -a  查看虚拟路由的相关网卡
+ifconfig veth1.1 10.0.0.2/24 up  宿主机添加虚拟网卡地址并 激活
+brctl delif br0 veth1.1 拆除网卡
+brctl addif br0 veth1.1 添加网卡
+ifconfig br0 up 激活交换机 
+ip netns exec router1 ifconfig lo 127.0.0.1/8 up 启用虚拟路由网卡
+ip netns exec router1 ifconfig 查看虚拟网卡
+ip netns exec router2 ifconfig -a 查看rouer2的网卡接口
+ip netns exec router2 ip link set veth1.1 name eth0 在R2上命名网卡
+ip netns exec router2 ifconfig eth0 10.0.0.3/24 添加ip
+
+实验：配置两个虚拟路由并添加IP，使其互联互通▲
+ip  link add veth1.1 type veth peer name veth1.2 生成虚拟网卡[成对]
+ip netns add router1 添加虚拟路由
+ip netns add router2 
+ip link set veth1.1 netns router1 添加虚拟接口到router1
+ip link set veth1.2 netns router2 
+ip netns exec router1 ip link set veth1.2 name eth0 改名
+ip netns exec router2 ip link set veth1.1 name eth0 
+ip netns exec router2 ifconfig eth0 10.0.0.2/24 up 添加接口IP
+ip netns exec router1 ifconfig eth0 10.0.0.1/24 up 
+ip netns exec router1 ifconfig 查看路由接口
+ip netns exec router2 ping 10.0.0.1  连通验证
+
+仅主机模式：把网卡当虚拟交换机，虚机内在同一网段可彼此通信，且虚拟交换机也是宿主机的网卡
+NAT模式：在宿主机上打开转发，只要出去的地址，就做nat转发，实际用的宿主机地址访问网络
+网桥模式：把网卡当交换机，模拟出物理网桥，使虚机模拟成独立主机
+叠加/隧道：用一个网络承载另外一个网络传输数据
+
+zebra 开源软件，运行在linux，可模拟路由器高级协议 
+
+主机级虚拟化：自己装虚拟机，虚拟机系统，cpu模拟/完全/半虚拟化
+磁盘虚拟化：模拟/全/半虚拟化，透传
+网卡：模拟，半虚拟化，透传
+虚拟化网络：专用软件，软交换机和软路由器构建 
+openVSwitch，OpenFlow  把数据层面跟控制层面分离，构建SDN
+网络功能虚拟化
+
+主机级虚拟化：(IaaS)
+● 软件 Xen[开源领域默认虚拟化软件]，kvm，vmware workstations，vmware server，vmware ESX，virtualbox，hypelV....
+● 二型虚拟化/一型虚拟化  
+区别：二型只单独管理虚机软件，一型含一型外，还要驱动硬件
+二型=虚拟机管理软件<--虚拟化内核<--宿主机
+一型=虚拟机管理软件<--宿主机
+
+容器级虚拟化 container （PaaS）  [用户空间级虚拟化]
+#kvm模块安装后，把内核空间虚拟化，然后在一个内核上创建多个用户空间，每一个独立用户空间就像一个虚拟机，性能接近宿主机，更加轻量化
+● docker compose，swarm，machine  容器管理器
+● kubernetes --> OpenShift：K8S上打包的管理平台，二次发型版
+● Mesos，Marathon 
+
+
+云计算系统即服务  CloudOS  (Saas)
+openstack；cloudstack
+统一调度资源，统一管理虚拟机 
+CaaS，FWaaS，LBaaS，DBaaS
+统一管理虚拟机，调度资源
+
+kvm：kernel-based Virtual Machine 基于内核的虚拟机
+1) X86_64  支持X86_64架构
+2) HVM: Inter VT  ; AMD-v  支持基于硬件辅助虚拟化，做安全虚拟化
+
+qemu：1M大小，能完整充当虚拟机，可模拟多种CPU，性能表现不好
+让kvm当qemu的加速器，实现基础平台，适合当前端用户空间管理工具
+
+内核空间的内核模块 2 qemu-kvm ； qemu-img管理磁盘镜像
+用户空间的管理工具 1 kvm-amd.ko ； kvm-int.ko
+
+libvirt：用于管理虚拟化平台的开源的API，后台程序和管理工具。它可以用于管理KVM、Xen、VMware ESX，QEMU和其他虚拟化技术，C/S管理接口，提供API，可远程管理；libvirtd 守护进程
+
+virt-manager  虚拟机管理软件，可创建虚拟机并保存
+virt-viewer：运行并查看虚拟机
+virtinst : 安装虚拟机，也可以用图形化工具xml配置文件实现
+virsh ：全生命周期命令行管理工具，实现虚机的增删改查等高级操作
+
+
+--安装kvm ▲虚拟机里安装虚拟机（嵌套）:
+34.27：
+#开虚机前先启用虚拟化引擎
+grep -i -E '(vmx|svm|lm)' /proc/cpuinfo 判断CPU是否支持硬件虚拟化
+#vmx：Inter VT-x  表示支持硬件虚拟化  
+#svm：AMD AMD-v
+#lm->long mode ->64位cpu 
+modprobe kvm 安装模块
+lsmod | grep kvm 或 ls /dev/kvm  验证模块 ↑
+#qemu-kvm [ 默认会把这个软件的命令行放在非path变量搜索到的位置]
+#使用virt-manager管理kvm  ↓
+yum install qemu-kvm libvirt-daemon-kvm [守护进程工具]
+ libvirt virt-manager [图形化管理工具] -y
+yum install gnome/KDE  图形化工具安装
+yum groupinstall "GNOME desktop" ↑ [优先安装图形界面]
+##node2   34.17
+cp ifcfg-ens32 ifcfg-br0 创建物理桥接接口，ens32交换机，br0当网卡
+vim ifcfg-ens32 删除IP uuid 掩码 网关 dns，添加BRIDGE=br0
+vim ifcfg-br0  修改DEVICE=br0，NAME=br0，TYPE=Bridge，
+并删除uuid，重启网络服务
+systemctl start libvirtd.service  启动守护进程[确保系统支持图形库]
+ 启动虚拟库↑ kvm依赖
+virt-manager  开启图形化安装界面
+#生成虚拟机--网络引导--linux类型-版本centos7.0--内存1024-2颗
+--启用存储20G--名称cengos7-选择网络桥接br0/ens33（安装前自定义配置）-virtIO 半虚拟化-开始安装-7.5mini安装
+
+
+--172.18.0.1下载cirros-no_cloud-0.3.0-i386-disk.img镜像
+mget cirros-no_cloud-0.3.0-i386-disk.img
+mv cirros-no_cloud-0.3.0-i386-disk.img  /VMS
+mkdir vm{1,2,3}
+cp cirros-no_cloud-0.3.0-i386-disk.img vm1/vm1.img
+systemctl start libvirtd
+yum install  libvirtd-daemon-kvm
+yum install  virt-manager
+virt-maneger  打开kvm 的图形界面，生成虚拟机
+
+--------------------------------------------------------------------------I
+第四十节课 2018年12月24日  周一
+--------------------------------------------------------------------------I
+
+AMP:HTTPD+APP+MSYSQL
+domain唯一标识 uudi +name
+
+KVM架构：
+每个VCPU相当于物理CPU的一个线程，单个VCPU内核数不能超过物理CPU内核数
+
+--virsh 能对虚拟机做全生命周期管理，各种功能通过自命令实现
+help dumpxml xx 显示虚拟机详情
+help dumpxml xx > /vm/vm2/vm2.xml
+更改 目录，name，mac
+virsh list 列出虚拟机
+	--all 显示所有虚拟机
+	--name 只显示虚拟机名称
+virsh define c2.xml  定义系统
+virsh start c2 系统系统
+virsh domifaddr c2
+virsh console c2   连接c2的串行控制台
+ctl+右中括号 退出当前终端
+virsh save c2 /tmp/c2.bin  --paused  将域恢复为暂停状态
+virsh restore /rmp/c2.bin --running   将域恢复为运行状态
+保存到磁盘中...
+reboot 重启 reset 重新设定目标域  shutduown关机
+destroy c2销毁虚拟机  undefine  取消定义域c2.xml 
+virsh domiflist c1  查看域信息
+virsh domblkinfo c2 hda  查看硬盘
+virsh domblkstat c2 hda
+virsh domifstat c2 vnet2 查看网络接口
+virsh net-list 查看网络
+virsh iface-list 查看接口
+
+qemu-img info xx.img 查看镜像文件信息
+qemu -img create -f qcow2 -o preallocation=metadata,size=10G /VMs/vm2/mydisk.img 创建磁盘镜像文件
+virsh attach-disk c2 /VMs/vm2/mydisk.img vda 添加磁盘
+virsh net-create virnet0.xml  创建网络
+virsh net-autostart isolated  标记为自动启动
+virsh detach-disk c2 vda vda 删除磁盘
+virsh net-default 
+masqure
