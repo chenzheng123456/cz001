@@ -1,0 +1,306 @@
+企业级监控服务 Zabbix
+课程大纲
+ 第一部分：Zabbix安装部署、实现分布式监控及网络知识
+1.Zabbix 监控及业务整体规划图
+2.安装Zabbix Server端和数据库
+3.安装客户端实现被动模式监控
+4.监控tomcat
+5.安装Zabbix proxy端和数据库
+6.配置zabbix 主动模式代理
+7.Zabbix Server通过主动 proxy 监控服务器
+ 第二部分：完全自定义模板及监控常用服务
+1.监控系统TCP连接数
+2.监控memcache
+3.监控redis
+4.监控mysql
+5.监控nginx
+6.自定义脚本监控端口和进程
+7.自定义系统基础监控模板
+8.编写脚本一键安装zabbix agent
+9.编写shell+python脚本实现短信报警
+
+数据采集：周期性时序数据
+ 主机/对象：服务器、路由器、交换机、存储、防火墙、IP、URL、自定义监控对象...
+ 采集目标：监控项，指标数据（metrics data）
+ 数据存储：
+ 存储系统：
+SQL: MySQL、PostgreSQL
+NoSQL：MongoDB、HBase、InfluxDB、Prometheus、redis ...
+rrd: Round Robin Database
+ 数据：
+ 历史数据: 每个监控项采集到的每个监控值
+ 趋势数据: 趋势表里主要保留某个监控项一个小时内历史数据的最大值、最小值和平均值以及该
+监控项一个小时内所采集到的数据个数。
+ 阈值：severity，可按照等级实现层级报警
+ 告警：email, 短信, 微信,语音,故障自治愈
+
+ 四大核心任务：
+采集：zabbix-server, zabbix-proxy,zabbix-agent
+ agentless SNMP,Telnet,ssh, IPMI, JMX, 
+ agent zabbix agent
+存储: zabbix database
+展示：zabbix web
+ graph -> screen -> slideshow(将多个screen以幻灯片的方式进行轮流展示)
+告警：
+ host (host groups) <- templates
+ host -> items -> triggers -> action (conditions, operations)
+z
+最小化安装操作系统:
+ 安装以下常用依赖包：
+ # yum install vim iotop bc gcc gcc-c++ glibc glibc-devel pcre pcre-devel openssl openssl-devel zip 
+unzip zlib-devel net-tools lrzsz tree ntpdate telnet lsof tcpdump wget libevent libevent-devel
+
+ 1.安装Zabbix server
+ 安装依赖包：
+ yum install gcc libxml2-devel net-snmp net-snmp-devel curl curl-devel php php-bcmath php-mbstring mariadb mariadbdevel –y
+ 准备数据库：
+ [root@zabbix-web1 ~]# mysql
+ mysql> create database zabbix character set utf8 collate utf8_bin;
+ Query OK, 1 row affected (0.00 sec)
+ mysql> grant all privileges on zabbix.* to zabbix@"identified by '123456';
+ Query OK, 0 rows affected (0.00 sec)
+ 编译安装:
+ [root@zabbix-server ~]# cd /usr/local/src/
+ [root@zabbix-serversrc]# zabbix-4.0.1.tar.gz 
+ [root@zabbix-serverzabbix-4.0.1]# useradd zabbix -s /sbin/nologin
+ # ./configure --prefix=/usr/local/zabbix --enable-server --enable-agent --with-mysql --with-net-snmp --with-libcurl --withlibxml2 --enable-java
+ # make && make install
+
+编译安装zabbix
+ 导入数据库：
+ #先导入此文件，如果做zabbix代理服务器，则只导入此文件即可
+ mysql -uzabbix -p123456 -h192.168.15.203 zabbix < database/mysql/schema.sql
+ mysql -uzabbix -p123456 -h192.168.15.203 zabbix < database/mysql/images.sql
+ mysql -uzabbix -p123456 -h192.168.15.203 zabbix < database/mysql/data.sql
+ 复制启动脚本：
+ cp /usr/local/src/zabbix-4.0.1/misc/init.d/fedora/core/zabbix_server /etc/init.d/
+ cp /usr/local/src/zabbix-4.0.1/misc/init.d/fedora/core/zabbix_agentd /etc/init.d/
+ 更改启动脚本：
+ vim /etc/init.d/zabbix_server
+ vim /etc/init.d/zabbix_agent
+ 21 # Zabbix-Directory
+ 22 BASEDIR=/usr/local/zabbix
+ 编辑zabbix_server.con配置文件：
+ #mkdir /var/log/zabbix && chown zabbix.zabbix /var/log/zabbix –R
+ [root@zabbix-server ~]# grep "^[a-Z]" /usr/local/zabbix/etc/zabbix_server.conf
+ LogFile=/var/log/zabbix/zabbix_server.log
+ DBHost=192.168.10.103
+ DBName=zabbix
+ DBUser=zabbix
+ DBPassword=123456
+ DBPort=3306
+ Timeout=30
+ LogSlowQueries=3000
+
+安装zabbix
+配置web界面：
+ 安装httpd：
+ #yum install httpd -y
+ #mkdir /var/www/html/zabbix
+ #cp -a /usr/local/src/zabbix-4.0.1/frontends/php/* /var/www/html/zabbix
+ # systemctl restart httpd 访问web
+ 解决报错：
+ yum install php-gettext php-session php-ctype php-xmlreader php-xmlwriter php-xml php-net-socket phpgd php-mysql
+ 如下更改vim /etc/php.ini：
+ post_max_size = 8M 改为 post_max_size = 16M 
+ max_execution_time = 30 改为 max_execution_time = 300
+ max_input_time = 60 改为 max_input_time = 300
+ ;date.timezone = 改为 date.timezone = date.timezone = Asia/Shanghai 
+ 重启http再次访问web
+ # systemctl restart httpd
+
+监控tomcat
+ 部署tomcat
+ 开启监控
+ Windows 验证jvm监控
+ 关联主机并验证
+
+ 安装配置java gateway
+ #yum install gcc libxml2-devel net-snmp net-snmp-devel curl curl-devel php php-bcmath
+php-mbstring mariadb-devel java-1.8.0-openjdk-devel -y
+ #./configure --prefix=/usr/local/zabbix --enable-java --with-net-snmp --with-mysql --with-ssh2
+ #make install
+ 配置文件：# vim /usr/local/zabbix/sbin/zabbix_java/settings.sh
+– LISTEN_IP="0.0.0.0"
+– LISTEN_PORT=10052
+– PID_FILE="/tmp/zabbix_java.pid"
+– START_POLLERS=20 #启动多少个进程轮训java，要和java 应用保持一定关系
+– TIMEOUT=30
+ #/usr/local/zabbix/sbin/zabbix_java/startup.sh #启动
+ 配置zabbix server调用java gateway：
+ vim /usr/local/zabbix/etc/zabbix_server.conf
+– JavaGateway=192.168.15.203 #指定java gateway的地址
+– JavaGatewayPort=10052 #指定java gateway的服务器监听端口，如果是默认端口可以不写
+– StartJavaPollers=20 #启动多少个进程去轮训 java gateway，要和java gateway的配置一致
+– Timeout=30
+
+配置tomcat 监控参数：
+ vim /apps/tomcat/bin/catalina.sh
+– CATALINA_OPTS="$CATALINA_OPTS 
+– -Dcom.sun.management.jmxremote #启用远程监控JMX
+– -Dcom.sun.management.jmxremote.port=12345 #默认启动的JMX端口号，要和zabbix添加主机时候的端
+口一致即可
+– -Dcom.sun.management.jmxremote.authenticate=false #不使用用户名密码
+– -Dcom.sun.management.jmxremote.ssl=false #不使用ssl认证
+– -Djava.rmi.server.hostname=x.x.x.x" #tomcat主机自己的IP地址，不要写zabbix服务器的地址
+ 配置JDK 环境：
+ # tar xvf jdk-7u79-linux-x64.tar.gz
+ # ln -sv /usr/local/src/jdk1.7.0_79/ /usr/local/jdk
+ # vim /etc/profile 
+– export JAVA_HOME=/usr/local/jdk
+– export TOMCAT_HOME=/apps/tomcat
+– export PATH=$JAVA_HOME/bin:$JAVA_HOME/jre/bin:$TOMCAT_HOME/bin:$PATH
+– export CLASSPATH=.$CLASSPATH:$JAVA_HOME/lib:$JAVA_HOME/jre/lib:$JAVA_HOME/lib/tools.jar
+ # source /etc/profile
+ # java -version
+
+Tomcat端安装zabbix agent:
+ 编译安装zabbix 客户端：
+ # tar xvf zabbix-4.0.1.tar.gz
+ # cd zabbix-4.0.1/
+ # ./configure --enable-agent --prefix=/usr/local/zabbix
+ # make && make install
+ # cp misc/init.d/fedora/core/zabbix_agentd /etc/init.d/
+ # vim /etc/init.d/zabbix_agentd
+ 22 BASEDIR=/usr/local/zabbix
+ # useradd zabbix -s /sbin/nologin
+ 更改zabbix agentd配置文件：
+ [root@zabbix-web1 ~]# grep "^[a-Z]" /usr/local/zabbix/etc/zabbix_agentd.conf
+ LogFile=/tmp/zabbix_agentd.log
+ DebugLevel=4
+ Server=192.168.10.101
+ Hostname=192.168.10.103 #server端添加此服务器的时候必须写次名称
+ 重启zabbix agentd服务：
+ # /usr/local/zabbix/sbin/zabbix_agentd -c /usr/local/zabbix/etc/zabbix_agentd.conf
+ # /etc/init.d/zabbix_agentd restart #脚本问题
+– 22 BASEDIR=/usr/local/zabbix
+– 72 action $"Starting $BINARY_NAME: " $FULLPATH -c /usr/local/zabbix/etc/zabbix_agentd.conf
+
+主动zabbix proxy
+ 主动模式与被动模式工作原理
+ 安装主动模式zabbix proxy
+ 配置agent 为主动模式
+ 添加主机并关联模板
+ 验证数据
+
+主动与被动
+ 这是对于zabbix agent来说的工作模式
+ 被动模式就是由zabbix server向zabbix agent发出指令获取数据，即zabbix agent被动的去获取
+数据并返回给zabbix server，zabbix server周期性的向agent 索取数据，这种模式的最大问题就
+是会加大zabbix server的工作量，在数百台服务器的环境下zabbix server不能及时获取到最新
+数据，但这也是默认的工作方式。
+ 主动模式是有zabbix agent主动采集数据并返回给zabbix server，不再需要zabbix serve进行干
+预，因此主动模式在一定程度上可减轻zabbix server的压力
+
+安装zabbix proxy
+ 1.安装Zabbix proxy
+ 安装依赖包：
+ [root@zabbix-proxy ~]# yum install gcc libxml2-devel net-snmp net-snmp-devel curl curl-devel
+php php-bcmath php-mbstring mariadb mariadb-devel java-1.8.0-openjdk-devel -y
+ 准备zabbix proxy数据库：
+ # mysql
+ mysql> create database zabbix_proxy character set utf8 collate utf8_bin;
+ grant all privileges on zabbix_proxy.* to proxy@'%' identified by '123456';
+ 编译安装:
+ useradd zabbix -s /sbin/nologin
+ ./configure --prefix=/usr/local/zabbix --enable-proxy --enable-agent --with-mysql --with-netsnmp --with-libcurl --with-libxml2 --enable-java
+ make install
+ 导入数据库：
+ [root@zabbix-proxy zabbix-4.0.1]# mysql -uproxy -p123456 -h192.168.15.203 zabbix_proxy < 
+database/mysql/schema.sq
+
+Proxy 被动模式配置文件:
+ 配置zabbix proxy：
+ # grep "^[a-Z]" /usr/local/zabbix/etc/zabbix_proxy.conf
+ ProxyMode=1 #0为主动，1为被动
+ Server=192.168.15.201 #zabbix server服务器的地址或主机名
+ Hostname=proxy1-mage-passive #代理服务器名称，需要与zabbix server添加代理时候的proxy name是一致的！
+ LogFile=/tmp/zabbix_proxy.log
+ DBHost=192.168.15.203 #数据库服务器地址
+ DBName=zabbix_proxy #使用的数据库名称
+ DBUser=proxy #连接数据库的用户名称
+ DBPassword=123456 #数据库用户密码
+ DBPort=3306 #数据库端口
+ ProxyLocalBuffer=3 #已经提交到zabbix server的数据保留时间
+ ProxyOfflineBuffer=24 #未提交到zabbix server的时间保留时间
+ HeartbeatFrequency=60 #心跳间隔检测时间，默认60秒，范围0-3600秒，被动模式不使用
+ ConfigFrequency=5 #间隔多久从zabbix server 获取监控信息
+ DataSenderFrequency=5 #数据发送时间间隔，默认为1秒，范围为1-3600秒，被动模式不使用
+ StartPollers=20 #启动的数据采集器数量
+ JavaGateway=192.168.15.202 #java gateway服务器地址,当需要监控java的时候必须配置否则监控不到数据
+ JavaGatewayPort=10052 #Javagatewa服务端口
+ StartJavaPollers=20 #启动多少个线程采集数据
+ CacheSize=2G #保存监控项而占用的最大内存
+ HistoryCacheSize=2G #保存监控历史数据占用的最大内存
+ Timeout=30 #监控项超时时间，单位为秒
+ LogSlowQueries=3000 #毫秒，多久的数据库查询会被记录到日志
+
+编译安装zabbix agent：
+[root@web-server zabbix-4.0.1]# ./configure --enable-agent --prefix=/usr/local/zabbix
+[root@web-server zabbix-4.0.1]# make install
+[root@web-server zabbix-4.0.1]# cp misc/init.d/fedora/core/zabbix_agentd /etc/init.d/
+[root@web-server zabbix-4.0.1]# vim /usr/local/zabbix/etc/zabbix_agentd.conf
+[root@web-server zabbix-4.0.1]# grep "^[a-Z]" /usr/local/zabbix/etc/zabbix_agentd.conf
+LogFile=/tmp/zabbix_agentd.log
+DebugLevel=4
+Server=192.168.15.202,192.168.15.201
+ListenPort=10050
+ListenIP=0.0.0.0
+StartAgents=3
+ServerActive=192.168.15.202
+Hostname=192.168.15.203
+Timeout=30
+UnsafeUserParameters=1
+
+Proxy 主动模式配置文件:
+ 配置zabbix proxy：
+ # grep "^[a-Z]" /usr/local/zabbix/etc/zabbix_proxy.conf
+ ProxyMode=0 #0为主动，1为被动
+ Server=192.168.15.201 #zabbix server服务器的地址或主机名
+ Hostname=mage_proxy #代理服务器名称，需要与zabbix server添加代理时候的proxy name是一致的！
+ LogFile=/tmp/zabbix_proxy.log
+ DBHost=192.168.15.203 #数据库服务器地址
+ DBName=zabbix_proxy
+ DBUser=zabbix
+ DBPassword=123456
+ DBPort=3306
+ ProxyLocalBuffer=3 #已经提交到zabbix server的数据保留时间
+ ProxyOfflineBuffer=24 #未提交到zabbix server的时间保留时间
+ HeartbeatFrequency=60 #心跳间隔检测时间，默认60秒，范围0-3600秒，被动模式不使用
+ ConfigFrequency=5 #间隔多久从zabbix server 获取监控信息
+ DataSenderFrequency=5 #数据发送时间间隔，默认为1秒，范围为1-3600秒，被动模式不使用
+ StartPollers=20 #启动的数据采集器数量
+ JavaGateway=192.168.15.202 #java gateway服务器地址
+ JavaGatewayPort=10052
+ StartJavaPollers=20 #启动多少个线程采集数据
+ CacheSize=2G #保存监控项而占用的最大内存
+ HistoryCacheSize=2G #保存监控历史数据占用的最大内存
+ Timeout=30
+ LogSlowQueries=3000
+
+[root@mysql-server zabbix-proxy-mysql-4.0.1]# pwd/usr/share/doc/zabbix-proxy-mysql-4.0.1#zcat schema.sql.gz | mysql -uzabbix_active -p123456 -h192.168.15.203 zabbix_proxy_active# systemctl restart zabbix-proxy.servi
+
+客户端安装agent
+ Web 客户端安装zabbix agent：
+ # yum install gcc -y 
+ # useradd zabbix -s /sbin/nologin
+ # tar xvf zabbix-4.0.1.tar.gz
+ # cd zabbix-4.0.1
+ # ./configure --prefix=/usr/local/zabbix --enable-agent
+ # make install
+ # cp misc/init.d/fedora/core/zabbix_agentd /etc/init.d/
+ # vim /etc/init.d/zabbix_agentd
+– 22 BASEDIR=/usr/local/zabbix
+ 更改配置文件：
+ [root@web-server apps]# grep "^[a-Z]" /usr/local/zabbix/etc/zabbix_agentd.conf
+ LogFile=/tmp/zabbix_agentd.log
+ DebugLevel=4
+ Server=192.168.15.203
+ ListenPort=10050
+ ListenIP=0.0.0.0
+ StartAgents=3
+ ServerActive=192.168.15.203
+ Hostname=192.168.15.204
+ Timeout=30
+ UnsafeUserParameters=1
+
